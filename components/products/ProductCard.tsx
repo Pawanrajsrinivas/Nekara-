@@ -23,7 +23,7 @@ export function ProductCard({ product, priority = false, className }: ProductCar
     setIsWishlisted((prev) => !prev);
   };
 
-  // Safe fallback image if external DummyJSON image fails or breaks
+  // Safe fallback image if product image fails to load
   const displayImage = imgError
     ? "/images/categories/silk-sarees.jpg"
     : product.image;

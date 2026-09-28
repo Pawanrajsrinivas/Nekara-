@@ -4,14 +4,14 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { NekaraProduct } from "@/types/product";
 import { getFeaturedProducts } from "@/lib/products";
-import { FALLBACK_PRODUCTS } from "@/lib/product-adapter";
 import { ProductCard } from "@/components/products/ProductCard";
 import { ProductSkeleton } from "@/components/products/ProductSkeleton";
 import { StoryPanel } from "@/components/home/StoryPanel";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
+import { cn } from "@/lib/utils";
 
 export function SignatureSarees() {
-  const [products, setProducts] = useState<NekaraProduct[]>(FALLBACK_PRODUCTS.slice(0, 4));
+  const [products, setProducts] = useState<NekaraProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,15 +20,10 @@ export function SignatureSarees() {
     setError(null);
     try {
       const data = await getFeaturedProducts(4);
-      if (data && data.length > 0) {
-        setProducts(data);
-      } else {
-        setProducts(FALLBACK_PRODUCTS.slice(0, 4));
-      }
+      setProducts(data || []);
     } catch (err) {
       console.warn("SignatureSarees fetch error:", err);
       setError("Unable to load latest collection.");
-      setProducts(FALLBACK_PRODUCTS.slice(0, 4));
     } finally {
       setIsLoading(false);
     }
@@ -94,50 +89,83 @@ export function SignatureSarees() {
             DESKTOP LAYOUT (lg & above):
             4 Saree Product Cards (or Skeletons) + 1 Storytelling Panel side-by-side
            ========================================================= */}
-        <div className="hidden lg:grid lg:grid-cols-5 gap-5 items-stretch">
-          {isLoading
-            ? Array.from({ length: 4 }).map((_, i) => (
-                <ProductSkeleton key={`home-desktop-skel-${i}`} className="h-full" />
-              ))
-            : products.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  className="h-full"
-                />
-              ))}
-
-          {/* 5th Column: Brand Heritage Story Panel */}
-          <StoryPanel className="h-full" />
-        </div>
-
-        {/* =========================================================
-            MOBILE & TABLET LAYOUT (< lg):
-            1. Clean, balanced 2-column product grid (2x2)
-            2. Followed by Full-Width Brand Heritage Story Panel
-           ========================================================= */}
-        <div className="lg:hidden">
-          {/* 2-Column Product Grid */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
-            {isLoading
-              ? Array.from({ length: 4 }).map((_, i) => (
-                  <ProductSkeleton key={`home-mobile-skel-${i}`} className="h-full" />
-                ))
-              : products.map((product, idx) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    priority={idx < 2}
-                    className="h-full"
-                  />
-                ))}
+        {(!isLoading && products.length === 0) ? (
+          <div className="py-12 text-center bg-[#FFFBF5] rounded-xs border border-[#B58A45]/20 p-8 max-w-xl mx-auto">
+            <IndianOrnament size={24} className="text-[#B58A45] mb-3" />
+            <h3 className="font-serif text-lg sm:text-xl text-[#241A15] font-normal mb-1">
+              Curating New Saree Collections
+            </h3>
+            <p className="text-xs sm:text-sm text-[#3A2115]/70 max-w-md mx-auto">
+              Our master weavers are curating our newest signature sarees. Explore our full collection in the shop.
+            </p>
+            <Link
+              href="/shop"
+              className="inline-flex items-center justify-center mt-5 px-6 py-2.5 rounded-xs bg-[#C89B3C] hover:bg-[#B58A45] text-[#241A15] font-sans font-semibold text-xs tracking-[0.16em] uppercase transition-all shadow-sm"
+            >
+              Explore Shop
+            </Link>
           </div>
+        ) : (
+          <>
+            <div
+              className="hidden lg:grid gap-5 items-stretch"
+              style={{
+                gridTemplateColumns:
+                  products.length >= 4
+                    ? "repeat(5, minmax(0, 1fr))"
+                    : products.length === 1
+                    ? "300px 1fr"
+                    : `repeat(${products.length + 1}, minmax(0, 1fr))`,
+              }}
+            >
+              {isLoading
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    <ProductSkeleton key={`home-desktop-skel-${i}`} className="h-full" />
+                  ))
+                : products.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      className="h-full"
+                    />
+                  ))}
 
-          {/* Full-Width Mobile Story Panel */}
-          <div className="mt-8 sm:mt-10">
-            <StoryPanel />
-          </div>
-        </div>
+              {/* Brand Heritage Story Panel */}
+              <StoryPanel className="h-full" />
+            </div>
+
+            {/* =========================================================
+                MOBILE & TABLET LAYOUT (< lg):
+                Clean 1 or 2-column layout followed by StoryPanel
+               ========================================================= */}
+            <div className="lg:hidden">
+              <div
+                className={cn(
+                  "grid gap-3 sm:gap-4",
+                  products.length === 1 ? "grid-cols-1 max-w-xs mx-auto" : "grid-cols-2"
+                )}
+              >
+                {isLoading
+                  ? Array.from({ length: 2 }).map((_, i) => (
+                      <ProductSkeleton key={`home-mobile-skel-${i}`} className="h-full" />
+                    ))
+                  : products.map((product, idx) => (
+                      <ProductCard
+                        key={product.id}
+                        product={product}
+                        priority={idx < 2}
+                        className="h-full"
+                      />
+                    ))}
+              </div>
+
+              {/* Full-Width Mobile Story Panel */}
+              <div className="mt-8 sm:mt-10">
+                <StoryPanel />
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Optional Gentle Error Banner with Retry */}
         {error && (

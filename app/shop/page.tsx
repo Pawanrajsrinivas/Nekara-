@@ -3,15 +3,15 @@
 import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { NekaraProduct, SareeCategory } from "@/types/product";
-import { getProducts } from "@/lib/products";
+import { NekaraProduct } from "@/types/product";
+import { getProducts, getCategories } from "@/lib/products";
 import { ProductGrid } from "@/components/products/ProductGrid";
 import { ProductGridSkeleton } from "@/components/products/ProductSkeleton";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { ChevronDownIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
 
-const CATEGORIES: { label: string; value: string }[] = [
+const DEFAULT_CATEGORIES: { label: string; value: string }[] = [
   { label: "All Sarees", value: "All" },
   { label: "Silk Sarees", value: "Silk Sarees" },
   { label: "Banarasi Sarees", value: "Banarasi Sarees" },
@@ -32,15 +32,17 @@ function ShopInner() {
   const searchParams = useSearchParams();
   const initialCategoryParam = searchParams.get("category");
 
+  const [categories, setCategories] = useState<{ label: string; value: string }[]>(DEFAULT_CATEGORIES);
+
   // Normalize initial category from URL
   const getInitialCategory = (): string => {
     if (!initialCategoryParam) return "All";
-    const found = CATEGORIES.find(
+    const found = DEFAULT_CATEGORIES.find(
       (c) =>
         c.value.toLowerCase().replace(/\s+/g, "-") ===
         initialCategoryParam.toLowerCase()
     );
-    return found ? found.value : "All";
+    return found ? found.value : initialCategoryParam;
   };
 
   const [selectedCategory, setSelectedCategory] = useState<string>(getInitialCategory);
@@ -51,17 +53,40 @@ function ShopInner() {
   const [limit, setLimit] = useState<number>(12);
   const [hasMore, setHasMore] = useState<boolean>(true);
 
+  // Load dynamic categories from Firestore
+  useEffect(() => {
+    async function loadDynamicCategories() {
+      try {
+        const firestoreCats = await getCategories();
+        if (firestoreCats && firestoreCats.length > 0) {
+          const list = [
+            { label: "All Sarees", value: "All" },
+            ...firestoreCats.map((c) => ({ label: c.name, value: c.name })),
+          ];
+          setCategories(list);
+        }
+      } catch (err) {
+        console.warn("Using default category list:", err);
+      }
+    }
+    loadDynamicCategories();
+  }, []);
+
   // Sync category state when URL searchParams changes
   useEffect(() => {
     if (initialCategoryParam) {
-      const match = CATEGORIES.find(
+      const match = categories.find(
         (c) =>
           c.value.toLowerCase().replace(/\s+/g, "-") ===
           initialCategoryParam.toLowerCase()
       );
-      if (match) setSelectedCategory(match.value);
+      if (match) {
+        setSelectedCategory(match.value);
+      } else {
+        setSelectedCategory(initialCategoryParam);
+      }
     }
-  }, [initialCategoryParam]);
+  }, [initialCategoryParam, categories]);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -142,7 +167,7 @@ function ShopInner() {
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 pb-4 border-b border-[#B58A45]/25">
           {/* Category Filter Pills / Carousel */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
-            {CATEGORIES.map((cat) => {
+            {categories.map((cat) => {
               const isActive = selectedCategory === cat.value;
               return (
                 <button
