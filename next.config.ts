@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/favicon.ico",
-        destination: "/images/brand/brand1.png",
+        destination: "/images/brand/tab_logo.png",
       },
     ];
   },

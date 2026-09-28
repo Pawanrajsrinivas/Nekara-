@@ -32,12 +32,16 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: "/images/brand/brand1.png",
+        url: "/images/brand/tab_logo.png",
+        type: "image/png",
+      },
+      {
+        url: "/icon.png",
         type: "image/png",
       },
     ],
-    shortcut: "/images/brand/brand1.png",
-    apple: "/images/brand/brand1.png",
+    shortcut: "/images/brand/tab_logo.png",
+    apple: "/images/brand/tab_logo.png",
   },
 };
 
@@ -53,8 +57,8 @@ export default function RootLayout({
       className={`${cinzel.variable} ${cormorant.variable} ${montserrat.variable} h-full antialiased`}
     >
       <head>
-        <link rel="icon" href="/images/brand/brand1.png" type="image/png" sizes="any" />
-        <link rel="apple-touch-icon" href="/images/brand/brand1.png" />
+        <link rel="icon" href="/images/brand/tab_logo.png" type="image/png" sizes="any" />
+        <link rel="apple-touch-icon" href="/images/brand/tab_logo.png" />
       </head>
       <body
         suppressHydrationWarning
