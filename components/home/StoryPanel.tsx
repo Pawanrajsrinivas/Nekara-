@@ -21,7 +21,7 @@ export function StoryPanel({ className }: StoryPanelProps) {
       <div className="absolute -bottom-8 -right-8 w-48 h-48 sm:w-56 sm:h-56 pointer-events-none opacity-10 select-none z-0">
         <div className="relative w-full h-full">
           <Image
-            src="/images/brand/tab_logo.png"
+            src="/images/brand/brand1.png"
             alt=""
             fill
             sizes="224px"

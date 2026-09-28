@@ -58,20 +58,24 @@ export function CategorySection() {
         </div>
 
         {/* =========================================================
-            CATEGORY CARDS ROW
+            CATEGORY CARDS
             Desktop: Exactly 6 circular cards in 1 row
-            Tablet / Mobile: Horizontally scrollable row with hidden scrollbar (showing 1.8-2.5 items)
+            Mobile: Dedicated, clean 3-column responsive grid (2 rows of 3)
            ========================================================= */}
-        <div className="flex md:grid md:grid-cols-6 gap-3.5 sm:gap-6 lg:gap-4 overflow-x-auto md:overflow-x-visible pb-4 md:pb-0 scroll-smooth snap-x snap-mandatory justify-start md:justify-items-center [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
+        {/* Desktop 6-column Grid */}
+        <div className="hidden md:grid md:grid-cols-6 gap-4 lg:gap-5 justify-items-center">
           {CATEGORIES_DATA.map((category, idx) => (
-            <div
-              key={category.id}
-              className="shrink-0 snap-start md:shrink w-[130px] sm:w-[145px] md:w-full flex justify-center"
-            >
-              <CategoryCard
-                category={category}
-                priority={idx < 3}
-              />
+            <div key={`desktop-cat-${category.id}`} className="w-full flex justify-center">
+              <CategoryCard category={category} priority={idx < 3} />
+            </div>
+          ))}
+        </div>
+
+        {/* Mobile 3-column Grid (Perfect for 320px–430px viewports) */}
+        <div className="grid md:hidden grid-cols-3 gap-y-4 gap-x-1.5 sm:gap-x-3 justify-items-center">
+          {CATEGORIES_DATA.map((category, idx) => (
+            <div key={`mobile-cat-${category.id}`} className="w-full flex justify-center">
+              <CategoryCard category={category} priority={idx < 3} />
             </div>
           ))}
         </div>

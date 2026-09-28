@@ -113,32 +113,23 @@ export function SignatureSarees() {
 
         {/* =========================================================
             MOBILE & TABLET LAYOUT (< lg):
-            1. Horizontal Swipeable Saree Product Carousel (showing 1.2–1.5 cards)
+            1. Clean, balanced 2-column product grid (2x2)
             2. Followed by Full-Width Brand Heritage Story Panel
            ========================================================= */}
         <div className="lg:hidden">
-          {/* Saree Product Carousel */}
-          <div className="flex gap-4 overflow-x-auto pb-4 pt-1 scroll-smooth snap-x snap-mandatory justify-start [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden -mx-4 px-4 sm:mx-0 sm:px-0">
+          {/* 2-Column Product Grid */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             {isLoading
               ? Array.from({ length: 4 }).map((_, i) => (
-                  <div
-                    key={`home-mobile-skel-${i}`}
-                    className="shrink-0 snap-start w-[240px] sm:w-[260px]"
-                  >
-                    <ProductSkeleton className="h-full" />
-                  </div>
+                  <ProductSkeleton key={`home-mobile-skel-${i}`} className="h-full" />
                 ))
               : products.map((product, idx) => (
-                  <div
+                  <ProductCard
                     key={product.id}
-                    className="shrink-0 snap-start w-[240px] sm:w-[260px]"
-                  >
-                    <ProductCard
-                      product={product}
-                      priority={idx < 2}
-                      className="h-full"
-                    />
-                  </div>
+                    product={product}
+                    priority={idx < 2}
+                    className="h-full"
+                  />
                 ))}
           </div>
 

@@ -2,6 +2,7 @@ import React from "react";
 import { HeroSlider } from "@/components/home/HeroSlider";
 import { TrustFeatures } from "@/components/home/TrustFeatures";
 import { CategorySection } from "@/components/home/CategorySection";
+import { ShopByStyle } from "@/components/home/ShopByStyle";
 import { SignatureSarees } from "@/components/home/SignatureSarees";
 import { BrandStory } from "@/components/home/BrandStory";
 import { CraftsmanshipSection } from "@/components/home/CraftsmanshipSection";
@@ -21,22 +22,25 @@ export default function HomePage() {
       {/* 3. Explore by Category */}
       <CategorySection />
 
-      {/* 4. Our Signature Sarees (Dynamic DummyJSON-powered) */}
+      {/* 4. Curated Shop by Style */}
+      <ShopByStyle />
+
+      {/* 5. Our Signature Sarees (Dynamic DummyJSON-powered) */}
       <SignatureSarees />
 
-      {/* 5. Brand Story & Heritage Lineage */}
+      {/* 6. Brand Story & Heritage Lineage */}
       <BrandStory />
 
-      {/* 6. The Art of the Weave / Craftsmanship */}
+      {/* 7. The Art of the Weave / Craftsmanship */}
       <CraftsmanshipSection />
 
-      {/* 7. Collection Call-to-Action */}
+      {/* 8. Collection Call-to-Action */}
       <CollectionCta />
 
-      {/* 8. From the NEKARA Journal */}
+      {/* 9. From the NEKARA Journal */}
       <JournalSection />
 
-      {/* 9. Privileged Access / Newsletter */}
+      {/* 10. Privileged Access / Newsletter */}
       <NewsletterSection />
     </div>
   );

@@ -67,7 +67,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         <div className="absolute -bottom-10 -right-10 w-64 h-64 sm:w-72 sm:h-72 pointer-events-none opacity-20 select-none z-0">
           <div className="relative w-full h-full">
             <Image
-              src="/images/brand/tab_logo.png"
+              src="/images/brand/brand1.png"
               alt=""
               fill
               sizes="288px"
@@ -79,22 +79,23 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
 
         {/* Top Header of Drawer */}
         <div className="relative z-10">
-          <div className="flex items-center justify-between px-6 pt-6 pb-5 border-b border-[#B58A45]/20 bg-[#02221D]/90 backdrop-blur-xs">
+          <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#B58A45]/20 bg-[#02221D]/90 backdrop-blur-xs">
             <div className="flex items-center gap-3">
-              <div className="relative w-9 h-9">
+              <div className="relative w-11 h-11 shrink-0 p-0.5 rounded-full ring-1 ring-[#B58A45]/40 bg-[#011C18]/80 overflow-hidden shadow-sm">
                 <Image
-                  src="/images/brand/tab_logo.png"
-                  alt="NEKARA Peacock Mark"
+                  src="/images/brand/brand1.png"
+                  alt="NEKARA Official Brand Logo"
                   fill
-                  sizes="36px"
-                  className="object-contain"
+                  sizes="44px"
+                  className="object-contain drop-shadow-md"
+                  priority
                 />
               </div>
               <div className="flex flex-col">
-                <span className="font-serif text-lg tracking-[0.2em] font-semibold text-[#FAF5ED] uppercase leading-tight">
+                <span className="font-serif text-[17px] tracking-[0.22em] font-semibold text-[#FAF5ED] uppercase leading-tight">
                   NEKARA
                 </span>
-                <span className="text-[9px] tracking-[0.25em] text-[#B58A45] uppercase font-sans">
+                <span className="text-[9px] tracking-[0.28em] text-[#B58A45] uppercase font-sans font-medium">
                   Sarees &amp; Textiles
                 </span>
               </div>

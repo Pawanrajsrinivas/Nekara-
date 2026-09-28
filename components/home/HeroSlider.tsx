@@ -74,7 +74,7 @@ export function HeroSlider() {
   return (
     <section
       aria-label="NEKARA Featured Hero Slider"
-      className="relative w-full h-[54vh] min-h-[420px] max-h-[500px] sm:h-[70vh] sm:min-h-[520px] md:h-[84vh] md:min-h-[600px] lg:h-[88vh] lg:min-h-[660px] md:max-h-[880px] overflow-hidden bg-[#123F38]"
+      className="relative w-full h-[64vh] min-h-[480px] max-h-[580px] sm:h-[72vh] sm:min-h-[520px] md:h-[84vh] md:min-h-[600px] lg:h-[88vh] lg:min-h-[660px] md:max-h-[880px] overflow-hidden bg-[#123F38]"
     >
       {/* Slides Background Images */}
       {HERO_SLIDES.map((slide, index) => (
@@ -101,14 +101,14 @@ export function HeroSlider() {
           {/* Vignette & Contrast Overlays:
               Mobile: Stronger bottom-to-top gradient so woman & peacock stay clear on top while text is 100% readable below
               Desktop: Left-to-right gradient for cinematic side-by-side presentation */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 via-50% to-transparent md:bg-gradient-to-r md:from-black/65 md:via-black/30 md:to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 via-55% to-transparent md:bg-gradient-to-r md:from-black/65 md:via-black/30 md:to-transparent pointer-events-none" />
           <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/30 pointer-events-none" />
         </div>
       ))}
 
       {/* Hero Content Area */}
-      <div className="relative z-20 max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex flex-col justify-end pb-6 sm:pb-12 md:pb-18 lg:pb-24 pt-16 sm:pt-20">
-        <div className="max-w-xl text-left space-y-2.5 sm:space-y-4">
+      <div className="relative z-20 max-w-7xl mx-auto h-full px-4 sm:px-6 lg:px-8 flex flex-col justify-end pb-7 sm:pb-12 md:pb-18 lg:pb-24 pt-20 sm:pt-24">
+        <div className="max-w-xl text-left space-y-2 sm:space-y-3.5">
           {/* Subtitle / Brand Edition Tag */}
           <div className="flex items-center gap-2">
             <span className="w-5 sm:w-6 h-[1px] bg-[#B58A45]" />
@@ -118,7 +118,7 @@ export function HeroSlider() {
           </div>
 
           {/* Hero Main Heading */}
-          <h1 className="font-serif text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-light text-[#FAF5ED] leading-[1.15] sm:leading-[1.1] tracking-wide whitespace-pre-line drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+          <h1 className="font-serif text-[22px] min-[380px]:text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-light text-[#FAF5ED] leading-[1.18] sm:leading-[1.1] tracking-wide whitespace-pre-line drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
             {HERO_SLIDES[currentSlide].title}
           </h1>
 
@@ -128,10 +128,10 @@ export function HeroSlider() {
           </p>
 
           {/* CTA Button */}
-          <div className="pt-1.5 sm:pt-3">
+          <div className="pt-2 sm:pt-3">
             <Link
               href={HERO_SLIDES[currentSlide].ctaLink}
-              className="inline-flex items-center gap-2 px-5 py-2.5 sm:px-7 sm:py-3 rounded-sm bg-[#C89B3C] hover:bg-[#B58A45] text-[#241A15] font-sans font-semibold text-[11px] sm:text-xs tracking-[0.16em] sm:tracking-[0.2em] uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+              className="inline-flex items-center gap-2 px-5 py-2.5 sm:px-7 sm:py-3 rounded-sm bg-[#C89B3C] hover:bg-[#B58A45] text-[#241A15] font-sans font-semibold text-[11px] sm:text-xs tracking-[0.16em] sm:tracking-[0.2em] uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 min-h-[42px]"
             >
               <span>{HERO_SLIDES[currentSlide].ctaText}</span>
             </Link>

@@ -13,7 +13,7 @@ export function BrandStory() {
       <div className="absolute -top-12 -right-12 w-64 h-64 sm:w-80 sm:h-80 pointer-events-none opacity-[0.035] select-none z-0">
         <div className="relative w-full h-full">
           <Image
-            src="/images/brand/tab_logo.png"
+            src="/images/brand/brand1.png"
             alt=""
             fill
             sizes="320px"

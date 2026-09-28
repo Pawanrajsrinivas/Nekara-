@@ -22,7 +22,7 @@ export function Logo({ className, variant = "horizontal", priority = true }: Log
       >
         <div className="relative w-10 h-10 sm:w-11 sm:h-11">
           <Image
-            src="/images/brand/tab_logo.png"
+            src="/images/brand/brand1.png"
             alt="NEKARA Peacock Mark"
             fill
             sizes="44px"
