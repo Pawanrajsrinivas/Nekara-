@@ -66,35 +66,43 @@ export function Navbar() {
               className="hidden md:flex items-center space-x-7 lg:space-x-9"
               aria-label="Main Navigation"
             >
-              {MAIN_NAV_ITEMS.map((item) => (
-                <div key={item.label} className="relative group">
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "relative inline-flex items-center gap-1 py-1 text-[13px] lg:text-[14px] uppercase tracking-[0.14em] font-medium transition-colors duration-300",
-                      isOpaque
-                        ? "text-[#241A15] hover:text-[#075E5A]"
-                        : "text-[#FAF5ED] hover:text-[#D4AF37] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-                    )}
-                  >
-                    <span>{item.label}</span>
-                    {item.hasDropdown && (
-                      <ChevronDownIcon
-                        size={12}
+              {MAIN_NAV_ITEMS.map((item) => {
+                const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+                return (
+                  <div key={item.label} className="relative group">
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "relative inline-flex items-center gap-1 py-1 text-[13px] lg:text-[14px] uppercase tracking-[0.14em] font-medium transition-colors duration-300",
+                        isActive
+                          ? isOpaque
+                            ? "text-[#075E5A] font-semibold"
+                            : "text-[#D4AF37] font-semibold drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                          : isOpaque
+                          ? "text-[#241A15] hover:text-[#075E5A]"
+                          : "text-[#FAF5ED] hover:text-[#D4AF37] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                      )}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <span>{item.label}</span>
+                      {item.hasDropdown && (
+                        <ChevronDownIcon
+                          size={12}
+                          className={cn(
+                            "transition-transform duration-200 group-hover:rotate-180 opacity-70 group-hover:opacity-100",
+                            isOpaque ? "text-[#241A15]" : "text-[#FAF5ED]"
+                          )}
+                        />
+                      )}
+                      {/* Animated Underline */}
+                      <span
                         className={cn(
-                          "transition-transform duration-200 group-hover:rotate-180 opacity-70 group-hover:opacity-100",
-                          isOpaque ? "text-[#241A15]" : "text-[#FAF5ED]"
+                          "absolute bottom-0 left-0 w-full h-[1.5px] transition-transform duration-300 origin-center",
+                          isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100",
+                          isOpaque ? "bg-[#075E5A]" : "bg-[#D4AF37]"
                         )}
                       />
-                    )}
-                    {/* Animated Underline */}
-                    <span
-                      className={cn(
-                        "absolute bottom-0 left-0 w-full h-[1.5px] scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-center",
-                        isOpaque ? "bg-[#075E5A]" : "bg-[#D4AF37]"
-                      )}
-                    />
-                  </Link>
+                    </Link>
 
                   {/* Future Dropdown Anchor Shell */}
                   {item.hasDropdown && item.subItems && (
@@ -116,7 +124,8 @@ export function Navbar() {
                     </div>
                   )}
                 </div>
-              ))}
+              )})}
+            
             </nav>
 
             {/* =========================================

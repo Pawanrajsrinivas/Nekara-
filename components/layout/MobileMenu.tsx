@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { MOBILE_PRIMARY_NAV_ITEMS, MOBILE_SECONDARY_NAV_ITEMS } from "@/data/navigation";
 import { CloseIcon, ChevronDownIcon, WishlistIcon, CartIcon, AccountIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ interface MobileMenuProps {
 }
 
 export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
+  const pathname = usePathname();
   // Prevent body scrolling when the mobile drawer is open
   useEffect(() => {
     if (isOpen) {
@@ -114,26 +116,41 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
           {/* Primary Navigation Links */}
           <nav className="px-6 py-6" aria-label="Mobile Primary Menu">
             <ul className="flex flex-col space-y-1">
-              {MOBILE_PRIMARY_NAV_ITEMS.map((item) => (
-                <li key={item.label}>
-                  <Link
-                    href={item.href}
-                    onClick={onClose}
-                    className="flex items-center justify-between py-3 text-[14px] sm:text-[15px] font-medium uppercase tracking-[0.16em] text-[#FAF5ED] hover:text-[#D4AF37] transition-colors group min-h-[44px]"
-                  >
-                    <span className="relative">
-                      {item.label}
-                      <span className="absolute -bottom-1 left-0 w-0 h-[1.5px] bg-[#B58A45] transition-all duration-300 group-hover:w-full" />
-                    </span>
-                    {item.hasDropdown && (
-                      <ChevronDownIcon
-                        size={14}
-                        className="text-[#FAF5ED]/50 group-hover:text-[#D4AF37] -rotate-90 transition-transform"
-                      />
-                    )}
-                  </Link>
-                </li>
-              ))}
+              {MOBILE_PRIMARY_NAV_ITEMS.map((item) => {
+                const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+                return (
+                  <li key={item.label}>
+                    <Link
+                      href={item.href}
+                      onClick={onClose}
+                      className={cn(
+                        "flex items-center justify-between py-3 text-[14px] sm:text-[15px] font-medium uppercase tracking-[0.16em] transition-colors group min-h-[44px]",
+                        isActive ? "text-[#D4AF37] font-semibold" : "text-[#FAF5ED] hover:text-[#D4AF37]"
+                      )}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <span className="relative">
+                        {item.label}
+                        <span
+                          className={cn(
+                            "absolute -bottom-1 left-0 h-[1.5px] bg-[#B58A45] transition-all duration-300",
+                            isActive ? "w-full" : "w-0 group-hover:w-full"
+                          )}
+                        />
+                      </span>
+                      {item.hasDropdown && (
+                        <ChevronDownIcon
+                          size={14}
+                          className={cn(
+                            "transition-transform -rotate-90",
+                            isActive ? "text-[#D4AF37]" : "text-[#FAF5ED]/50 group-hover:text-[#D4AF37]"
+                          )}
+                        />
+                      )}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
 
