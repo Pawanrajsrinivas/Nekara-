@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: "/favicon.ico",
+        destination: "/images/brand/tab_logo.png",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -67,7 +67,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
         <div className="absolute -bottom-10 -right-10 w-64 h-64 sm:w-72 sm:h-72 pointer-events-none opacity-20 select-none z-0">
           <div className="relative w-full h-full">
             <Image
-              src="/images/brand/tab%20logo.png"
+              src="/images/brand/tab_logo.png"
               alt=""
               fill
               sizes="288px"
@@ -83,7 +83,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             <div className="flex items-center gap-3">
               <div className="relative w-9 h-9">
                 <Image
-                  src="/images/brand/tab%20logo.png"
+                  src="/images/brand/tab_logo.png"
                   alt="NEKARA Peacock Mark"
                   fill
                   sizes="36px"

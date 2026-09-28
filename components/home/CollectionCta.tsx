@@ -13,7 +13,7 @@ export function CollectionCta() {
       <div className="absolute -top-16 -left-16 w-64 h-64 sm:w-80 sm:h-80 pointer-events-none opacity-10 select-none z-0">
         <div className="relative w-full h-full">
           <Image
-            src="/images/brand/tab%20logo.png"
+            src="/images/brand/tab_logo.png"
             alt=""
             fill
             sizes="320px"
@@ -26,7 +26,7 @@ export function CollectionCta() {
       <div className="absolute -bottom-16 -right-16 w-64 h-64 sm:w-80 sm:h-80 pointer-events-none opacity-10 select-none z-0">
         <div className="relative w-full h-full">
           <Image
-            src="/images/brand/tab%20logo.png"
+            src="/images/brand/tab_logo.png"
             alt=""
             fill
             sizes="320px"

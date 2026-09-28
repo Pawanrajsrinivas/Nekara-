@@ -41,7 +41,7 @@ export function Footer() {
       <div className="absolute -bottom-16 -right-16 w-80 h-80 pointer-events-none opacity-[0.06] select-none z-0">
         <div className="relative w-full h-full">
           <Image
-            src="/images/brand/tab%20logo.png"
+            src="/images/brand/tab_logo.png"
             alt=""
             fill
             sizes="320px"
@@ -65,7 +65,7 @@ export function Footer() {
             >
               <div className="relative w-10 h-10">
                 <Image
-                  src="/images/brand/tab%20logo.png"
+                  src="/images/brand/tab_logo.png"
                   alt="NEKARA Peacock Mark"
                   fill
                   sizes="40px"
