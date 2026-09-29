@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
@@ -20,18 +21,23 @@ export const isFirebaseConfigured = (): boolean => {
 
 let app: FirebaseApp;
 let db: Firestore;
+let auth: Auth;
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 try {
   app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
   db = getFirestore(app);
+  auth = getAuth(app);
   if (process.env.NODE_ENV !== "production") {
-    console.log("[NEKARA] Firebase initialized successfully with project:", firebaseConfig.projectId);
+    console.log("[NEKARA] Firebase & Auth initialized with project:", firebaseConfig.projectId);
   }
 } catch (error) {
   console.error("[NEKARA] Firebase initialization failed:", error);
   app = {} as FirebaseApp;
   db = {} as Firestore;
+  auth = {} as Auth;
 }
 
-export { app, db };
+export { app, db, auth, googleProvider };
 export default app;

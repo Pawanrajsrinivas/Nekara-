@@ -3,6 +3,9 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 import { NekaraProduct } from "@/types/product";
 import { WishlistIcon, CartIcon } from "@/components/ui/Icons";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
@@ -15,6 +18,10 @@ interface ProductDetailViewProps {
 }
 
 export function ProductDetailView({ product, relatedProducts = [] }: ProductDetailViewProps) {
+  const router = useRouter();
+  const { isAuthenticated } = useAuth();
+  const { addToCart } = useCart();
+
   const images = product.images && product.images.length > 0 ? product.images : [product.image];
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -33,11 +40,21 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
     });
   };
 
-  const handleAddToCart = () => {
-    setIsAddedToCart(true);
-    setTimeout(() => {
-      setIsAddedToCart(false);
-    }, 2800);
+  const handleAddToCart = async () => {
+    // If client is not signed in, redirect to login while preserving destination & cart action
+    if (!isAuthenticated) {
+      const dest = `/product/${encodeURIComponent(product.slug || product.id)}`;
+      router.push(`/login?redirect=${encodeURIComponent(dest)}&action=addToCart&qty=${quantity}`);
+      return;
+    }
+
+    const success = await addToCart(product, quantity);
+    if (success) {
+      setIsAddedToCart(true);
+      setTimeout(() => {
+        setIsAddedToCart(false);
+      }, 2800);
+    }
   };
 
   const toggleWishlist = () => {

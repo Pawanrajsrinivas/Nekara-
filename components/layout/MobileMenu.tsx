@@ -7,6 +7,8 @@ import { usePathname } from "next/navigation";
 import { MOBILE_PRIMARY_NAV_ITEMS, MOBILE_SECONDARY_NAV_ITEMS } from "@/data/navigation";
 import { CloseIcon, ChevronDownIcon, WishlistIcon, CartIcon, AccountIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -15,6 +17,8 @@ interface MobileMenuProps {
 
 export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const pathname = usePathname();
+  const { user, profile, isAuthenticated, logout } = useAuth();
+  const { totalItems } = useCart();
   // Prevent body scrolling when the mobile drawer is open
   useEffect(() => {
     if (isOpen) {
@@ -169,8 +173,66 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             <span className="block text-[10px] font-semibold uppercase tracking-[0.25em] text-[#B58A45] mb-3">
               Client Suite
             </span>
+
+            {/* User Profile / Sign In Quick Status */}
+            {isAuthenticated ? (
+              <div className="flex items-center justify-between p-2.5 mb-3 bg-[#011C18]/90 border border-[#B58A45]/30 rounded">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-full bg-[#B58A45]/20 border border-[#B58A45]/40 flex items-center justify-center text-[#B58A45] font-serif text-sm font-semibold overflow-hidden shrink-0">
+                    {user?.photoURL ? (
+                      <Image
+                        src={user.photoURL}
+                        alt=""
+                        width={32}
+                        height={32}
+                        className="w-full h-full object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      (profile?.displayName || user?.email || "U").slice(0, 1).toUpperCase()
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-medium text-[#FAF5ED] truncate">
+                      {profile?.displayName || user?.email?.split("@")[0]}
+                    </p>
+                    <p className="text-[9px] text-[#B58A45] tracking-wider uppercase">Patron of Handloom</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    logout();
+                    onClose();
+                  }}
+                  className="text-[10px] text-[#FAF5ED]/60 hover:text-[#D4AF37] uppercase tracking-wider pl-2 min-h-[36px] flex items-center"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                onClick={onClose}
+                className="flex items-center justify-center gap-2 w-full py-2.5 px-3 mb-3 bg-[#B58A45]/15 hover:bg-[#B58A45]/25 border border-[#B58A45]/35 rounded text-[11px] uppercase font-medium tracking-[0.18em] text-[#FAF5ED] transition-colors"
+              >
+                <AccountIcon size={14} className="text-[#B58A45]" />
+                <span>Sign In / Register</span>
+              </Link>
+            )}
+
             <ul className="flex flex-col space-y-2">
               {MOBILE_SECONDARY_NAV_ITEMS.map((item) => {
+                const getTargetHref = () => {
+                  if (item.label === "Cart") {
+                    return isAuthenticated ? "/cart" : "/login?redirect=/cart";
+                  }
+                  if (item.label === "My Account" || item.label === "My Orders") {
+                    return isAuthenticated ? item.href : `/login?redirect=${encodeURIComponent(item.href)}`;
+                  }
+                  return item.href;
+                };
+
                 const getIcon = () => {
                   switch (item.label) {
                     case "Wishlist":
@@ -180,19 +242,26 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                     case "My Account":
                       return <AccountIcon size={16} strokeWidth={1.4} className="text-[#B58A45]" />;
                     default:
-                      return null;
+                      return <span className="w-4 h-4 rounded-full border border-[#B58A45]/40 inline-block" />;
                   }
                 };
 
                 return (
                   <li key={item.label}>
                     <Link
-                      href={item.href}
+                      href={getTargetHref()}
                       onClick={onClose}
-                      className="flex items-center gap-3 py-2 text-[13px] text-[#FAF5ED]/80 hover:text-[#D4AF37] transition-colors min-h-[40px]"
+                      className="flex items-center justify-between py-2 text-[13px] text-[#FAF5ED]/80 hover:text-[#D4AF37] transition-colors min-h-[40px]"
                     >
-                      {getIcon()}
-                      <span className="tracking-wide">{item.label}</span>
+                      <div className="flex items-center gap-3">
+                        {getIcon()}
+                        <span className="tracking-wide">{item.label}</span>
+                      </div>
+                      {item.label === "Cart" && isAuthenticated && totalItems > 0 && (
+                        <span className="min-w-[18px] h-[18px] px-1 bg-[#851E2C] text-[#FAF5ED] text-[10px] font-bold rounded-full flex items-center justify-center border border-[#FAF5ED]/40">
+                          {totalItems > 99 ? "99+" : totalItems}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );

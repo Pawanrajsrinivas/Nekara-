@@ -6,6 +6,9 @@ import { usePathname } from "next/navigation";
 import { Logo } from "@/components/layout/Logo";
 import { MobileMenu } from "@/components/layout/MobileMenu";
 import { MAIN_NAV_ITEMS } from "@/data/navigation";
+import Image from "next/image";
+import { useAuth } from "@/context/AuthContext";
+import { useCart } from "@/context/CartContext";
 import {
   SearchIcon,
   WishlistIcon,
@@ -21,6 +24,10 @@ export function Navbar() {
   const isHomePage = pathname === "/";
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const { user, profile, isAuthenticated } = useAuth();
+  const { totalItems } = useCart();
+  const avatarUrl = profile?.photoURL || user?.photoURL;
 
   // An opaque cream navbar is used when scrolled OR when on interior pages like /shop
   const isOpaque = isScrolled || !isHomePage;
@@ -164,31 +171,69 @@ export function Navbar() {
 
               {/* Account Button (Desktop only) */}
               <Link
-                href="/account"
+                href={isAuthenticated ? "/account" : "/login?redirect=/account"}
                 className={cn(
-                  "hidden md:inline-flex p-1.5 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B58A45]",
+                  "hidden md:inline-flex items-center justify-center p-1.5 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B58A45]",
                   isOpaque
                     ? "text-[#241A15] hover:text-[#075E5A]"
                     : "text-[#FAF5ED] hover:text-[#D4AF37] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
                 )}
-                aria-label="Client account"
+                aria-label={isAuthenticated ? "Client account" : "Sign in to your account"}
+                title={isAuthenticated ? (profile?.displayName || user?.email || "Account") : "Sign In"}
               >
-                <AccountIcon size={19} strokeWidth={1.5} />
+                {isAuthenticated && avatarUrl ? (
+                  <div className="w-5 h-5 rounded-full overflow-hidden border border-[#B58A45]/60 relative">
+                    <Image
+                      src={avatarUrl}
+                      alt={profile?.displayName || "Account"}
+                      width={20}
+                      height={20}
+                      className="w-full h-full object-cover"
+                      unoptimized
+                    />
+                  </div>
+                ) : (
+                  <AccountIcon size={19} strokeWidth={1.5} />
+                )}
               </Link>
 
               {/* Shopping Bag / Cart Button (Tablet & Desktop) */}
               <Link
-                href="/cart"
+                href={isAuthenticated ? "/cart" : "/login?redirect=/cart"}
                 className={cn(
                   "hidden sm:inline-flex relative p-1.5 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B58A45]",
                   isOpaque
                     ? "text-[#241A15] hover:text-[#075E5A]"
                     : "text-[#FAF5ED] hover:text-[#D4AF37] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
                 )}
-                aria-label="Shopping bag with 0 items"
+                aria-label={`Shopping bag with ${totalItems} items`}
               >
                 <CartIcon size={19} strokeWidth={1.5} />
-                <span className="sr-only">0 items in bag</span>
+                {isAuthenticated && totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[#851E2C] text-[#FAF5ED] text-[10px] font-bold rounded-full flex items-center justify-center border border-[#FAF5ED] shadow-sm animate-in fade-in zoom-in duration-200">
+                    {totalItems > 99 ? "99+" : totalItems}
+                  </span>
+                )}
+                <span className="sr-only">{totalItems} items in bag</span>
+              </Link>
+
+              {/* Mobile Cart Button (Mobile only) */}
+              <Link
+                href={isAuthenticated ? "/cart" : "/login?redirect=/cart"}
+                className={cn(
+                  "sm:hidden relative p-2 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B58A45] min-w-[40px] min-h-[40px] flex items-center justify-center",
+                  isOpaque
+                    ? "text-[#241A15] hover:text-[#075E5A]"
+                    : "text-[#FAF5ED] hover:text-[#D4AF37] drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]"
+                )}
+                aria-label={`Shopping bag with ${totalItems} items`}
+              >
+                <CartIcon size={20} strokeWidth={1.75} />
+                {isAuthenticated && totalItems > 0 && (
+                  <span className="absolute top-1 -right-0.5 min-w-[17px] h-[17px] px-1 bg-[#851E2C] text-[#FAF5ED] text-[10px] font-bold rounded-full flex items-center justify-center border border-[#FAF5ED] shadow-sm">
+                    {totalItems > 99 ? "99+" : totalItems}
+                  </span>
+                )}
               </Link>
 
               {/* Mobile Menu Hamburger Button */}
