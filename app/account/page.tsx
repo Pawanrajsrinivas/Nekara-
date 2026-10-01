@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,7 @@ export default function AccountPage() {
   const router = useRouter();
   const { user, profile, loading: authLoading, logout, isAuthenticated } = useAuth();
   const { totalItems } = useCart();
+  const [avatarError, setAvatarError] = useState(false);
 
   // Protect private account page
   useEffect(() => {
@@ -84,13 +85,15 @@ export default function AccountPage() {
             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-5">
               {/* Avatar Photo or Monogram Circle */}
               <div className="relative w-20 h-20 sm:w-22 sm:h-22 rounded-full overflow-hidden border-2 border-[#B58A45]/40 bg-[#FAF3E7] flex items-center justify-center shadow-sm shrink-0">
-                {photoURL ? (
+                {photoURL && !avatarError ? (
                   <Image
                     src={photoURL}
                     alt={displayName}
                     fill
                     sizes="88px"
                     className="object-cover"
+                    unoptimized
+                    onError={() => setAvatarError(true)}
                   />
                 ) : (
                   <span className="font-serif text-2xl sm:text-3xl text-[#075E5A] font-semibold">

@@ -54,7 +54,13 @@ const HERO_SLIDES: HeroSlide[] = [
   },
 ];
 
-export function HeroSlider() {
+interface HeroSliderProps {
+  enabled?: boolean;
+  title?: string;
+  subtitle?: string;
+}
+
+export function HeroSlider({ enabled = true, title, subtitle }: HeroSliderProps = {}) {
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const nextSlide = useCallback(() => {
@@ -70,6 +76,8 @@ export function HeroSlider() {
     const timer = setInterval(nextSlide, 7000);
     return () => clearInterval(timer);
   }, [nextSlide]);
+
+  if (!enabled) return null;
 
   return (
     <section

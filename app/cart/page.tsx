@@ -13,7 +13,18 @@ import { cn } from "@/lib/utils";
 export default function CartPage() {
   const router = useRouter();
   const { user, isAuthenticated, loading: authLoading } = useAuth();
-  const { items, totalItems, totalAmount, formattedTotalAmount, updateQuantity, removeFromCart, loading: cartLoading } = useCart();
+  const {
+    items,
+    totalItems,
+    totalAmount,
+    formattedTotalAmount,
+    updateQuantity,
+    removeFromCart,
+    loading: cartLoading,
+    cartError,
+    clearCartError,
+    refreshLiveStock,
+  } = useCart();
 
   // Protect private cart page: unauthenticated visitors are redirected to /login?redirect=/cart
   useEffect(() => {
@@ -21,6 +32,13 @@ export default function CartPage() {
       router.replace("/login?redirect=/cart");
     }
   }, [authLoading, isAuthenticated, router]);
+
+  // Re-verify live stock whenever cart items are active
+  useEffect(() => {
+    if (isAuthenticated && items.length > 0) {
+      refreshLiveStock();
+    }
+  }, [isAuthenticated, items.length, refreshLiveStock]);
 
   if (authLoading || (isAuthenticated && cartLoading)) {
     return (
@@ -41,6 +59,13 @@ export default function CartPage() {
 
   const isEmpty = items.length === 0;
 
+  // Check if any item has stock conflicts
+  const hasStockIssue = items.some(
+    (item) =>
+      typeof item.stock === "number" &&
+      (item.stock <= 0 || item.quantity > item.stock)
+  );
+
   return (
     <div className="w-full min-h-screen pt-28 sm:pt-36 pb-20 bg-[#FDFBF7]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -58,9 +83,29 @@ export default function CartPage() {
             SHOPPING BAG
           </span>
           <h1 className="font-serif text-3xl sm:text-4xl text-[#241A15] font-normal tracking-wide">
-            Your Cart {totalItems > 0 && <span className="text-xl sm:text-2xl text-[#3A2115]/60">({totalItems} {totalItems === 1 ? "Item" : "Items"})</span>}
+            Your Cart{" "}
+            {totalItems > 0 && (
+              <span className="text-xl sm:text-2xl text-[#3A2115]/60">
+                ({totalItems} {totalItems === 1 ? "Saree" : "Sarees"})
+              </span>
+            )}
           </h1>
         </div>
+
+        {/* Global Cart Error Banner */}
+        {cartError && (
+          <div className="max-w-3xl mx-auto mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xs text-xs text-amber-900 flex items-center justify-between shadow-xs">
+            <span>{cartError}</span>
+            <button
+              type="button"
+              onClick={clearCartError}
+              className="text-amber-800 hover:text-amber-950 font-bold px-2"
+              aria-label="Dismiss message"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* =========================================================
             EMPTY CART STATE
@@ -69,10 +114,10 @@ export default function CartPage() {
           <div className="max-w-md mx-auto bg-[#FFFBF5] rounded-xs border border-[#B58A45]/30 p-8 sm:p-12 text-center shadow-[0_4px_24px_rgba(58,33,21,0.04)]">
             <IndianOrnament size={28} className="text-[#B58A45] mb-4 mx-auto" />
             <h2 className="font-serif text-2xl text-[#241A15] font-normal mb-2">
-              Your bag is empty
+              Your Shop Bag is Empty
             </h2>
             <p className="text-xs sm:text-sm text-[#3A2115]/70 max-w-xs mx-auto mb-6">
-              You haven&apos;t added any sarees to your shopping bag yet. Explore our handcrafted collection.
+              You haven&apos;t added any sarees to your shopping bag yet. Explore our handcrafted collection of royal handlooms.
             </p>
             <Link
               href="/shop"
@@ -89,94 +134,140 @@ export default function CartPage() {
             {/* LEFT COLUMN: ITEM LIST (lg:col-span-8) */}
             <div className="lg:col-span-8 space-y-4">
               <div className="bg-[#FFFBF5] rounded-xs border border-[#B58A45]/30 divide-y divide-[#B58A45]/20 shadow-xs">
-                {items.map((item) => (
-                  <div key={item.id} className="p-4 sm:p-6 flex flex-col sm:flex-row gap-4 sm:gap-6 items-start">
-                    {/* Saree Thumbnail Image */}
-                    <Link
-                      href={`/product/${item.slug || item.productId}`}
-                      className="relative w-24 sm:w-28 aspect-[3/4] rounded-xs overflow-hidden bg-[#FAF3E7] shrink-0 border border-[#B58A45]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B58A45]"
+                {items.map((item) => {
+                  const isItemOutOfStock =
+                    typeof item.stock === "number" && item.stock <= 0;
+                  const isItemExceedingStock =
+                    typeof item.stock === "number" &&
+                    item.stock > 0 &&
+                    item.quantity > item.stock;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        "p-4 sm:p-6 flex flex-col sm:flex-row gap-4 sm:gap-6 items-start transition-colors",
+                        isItemOutOfStock ? "bg-red-50/40" : isItemExceedingStock ? "bg-amber-50/40" : ""
+                      )}
                     >
-                      <Image
-                        src={item.image}
-                        alt={item.name}
-                        fill
-                        sizes="112px"
-                        className="object-cover"
-                      />
-                    </Link>
+                      {/* Saree Thumbnail Image */}
+                      <Link
+                        href={`/product/${item.slug || item.productId}`}
+                        className="relative w-24 sm:w-28 aspect-[3/4] rounded-xs overflow-hidden bg-[#FAF3E7] shrink-0 border border-[#B58A45]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B58A45]"
+                      >
+                        <Image
+                          src={item.imageSnapshot || item.image}
+                          alt={item.nameSnapshot || item.name}
+                          fill
+                          sizes="112px"
+                          className="object-cover"
+                        />
+                      </Link>
 
-                    {/* Saree Information & Controls */}
-                    <div className="flex-1 flex flex-col justify-between w-full min-h-[120px]">
-                      <div>
-                        {item.categoryName && (
-                          <span className="text-[10px] font-sans font-semibold uppercase tracking-wider text-[#B58A45] block">
-                            {item.categoryName}
-                          </span>
-                        )}
-                        <Link
-                          href={`/product/${item.slug || item.productId}`}
-                          className="font-serif text-base sm:text-lg text-[#241A15] hover:text-[#075E5A] transition-colors leading-snug line-clamp-1 block mt-0.5"
-                        >
-                          {item.name}
-                        </Link>
-                        {(item.fabric || item.color) && (
-                          <p className="text-[11px] text-[#3A2115]/65 font-sans mt-0.5">
-                            {[item.fabric, item.color].filter(Boolean).join(" • ")}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Pricing Row */}
-                      <div className="flex items-baseline gap-2 mt-2">
-                        <span className="font-sans font-semibold text-sm sm:text-base text-[#241A15]">
-                          {formatINR(item.price)}
-                        </span>
-                        {item.originalPrice && item.originalPrice > item.price && (
-                          <span className="text-xs text-[#3A2115]/40 line-through font-sans">
-                            {formatINR(item.originalPrice)}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Actions: Quantity Selector & Remove Button */}
-                      <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#B58A45]/15">
-                        {/* Quantity Counter */}
-                        <div className="flex items-center border border-[#B58A45]/40 rounded-xs bg-[#FAF6F0]">
-                          <button
-                            type="button"
-                            onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))}
-                            disabled={item.quantity <= 1}
-                            className="w-8 h-8 flex items-center justify-center text-[#241A15] hover:bg-[#FAF3E7] disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-medium"
-                            aria-label={`Decrease quantity of ${item.name}`}
+                      {/* Saree Information & Controls */}
+                      <div className="flex-1 flex flex-col justify-between w-full min-h-[120px]">
+                        <div>
+                          {item.categoryName && (
+                            <span className="text-[10px] font-sans font-semibold uppercase tracking-wider text-[#B58A45] block">
+                              {item.categoryName}
+                            </span>
+                          )}
+                          <Link
+                            href={`/product/${item.slug || item.productId}`}
+                            className="font-serif text-base sm:text-lg text-[#241A15] hover:text-[#075E5A] transition-colors leading-snug line-clamp-1 block mt-0.5"
                           >
-                            -
-                          </button>
-                          <span className="w-8 text-center font-sans font-semibold text-xs text-[#241A15]">
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            disabled={Boolean(item.stock && item.quantity >= item.stock)}
-                            className="w-8 h-8 flex items-center justify-center text-[#241A15] hover:bg-[#FAF3E7] disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-medium"
-                            aria-label={`Increase quantity of ${item.name}`}
-                          >
-                            +
-                          </button>
+                            {item.nameSnapshot || item.name}
+                          </Link>
+                          {(item.fabric || item.color) && (
+                            <p className="text-[11px] text-[#3A2115]/65 font-sans mt-0.5">
+                              {[item.fabric, item.color].filter(Boolean).join(" • ")}
+                            </p>
+                          )}
+
+                          {/* Inventory conflict status alerts */}
+                          {isItemOutOfStock ? (
+                            <div className="mt-1 text-[11px] font-medium text-red-700 flex items-center gap-1">
+                              <span>⚠️ This saree has sold out. Please remove it to proceed.</span>
+                            </div>
+                          ) : isItemExceedingStock ? (
+                            <div className="mt-1 text-[11px] font-medium text-amber-800 flex items-center gap-1">
+                              <span>
+                                ⚠️ Stock reduced: Only {item.stock} available. Please reduce quantity to {item.stock}.
+                              </span>
+                            </div>
+                          ) : item.stock === 1 ? (
+                            <div className="mt-1 text-[10px] font-medium text-amber-700">
+                              Only 1 unit remaining in inventory.
+                            </div>
+                          ) : null}
                         </div>
 
-                        {/* Remove from Cart */}
-                        <button
-                          type="button"
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-[11px] font-sans text-[#8B2626] hover:text-red-700 underline tracking-wider uppercase transition-colors min-h-[44px] flex items-center px-2"
-                        >
-                          Remove
-                        </button>
+                        {/* Pricing Row */}
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="font-sans font-semibold text-sm sm:text-base text-[#241A15]">
+                            {formatINR(item.priceSnapshot || item.price)}
+                          </span>
+                          {(item.originalPriceSnapshot || item.originalPrice) &&
+                            (item.originalPriceSnapshot || item.originalPrice)! >
+                              (item.priceSnapshot || item.price) && (
+                              <span className="text-xs text-[#3A2115]/40 line-through font-sans">
+                                {formatINR(
+                                  (item.originalPriceSnapshot || item.originalPrice)!
+                                )}
+                              </span>
+                            )}
+                        </div>
+
+                        {/* Actions: Quantity Selector & Remove Button */}
+                        <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#B58A45]/15">
+                          {/* Quantity Counter */}
+                          <div className="flex items-center border border-[#B58A45]/40 rounded-xs bg-[#FAF6F0]">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateQuantity(
+                                  item.productId,
+                                  Math.max(1, item.quantity - 1)
+                                )
+                              }
+                              disabled={item.quantity <= 1}
+                              className="w-8 h-8 flex items-center justify-center text-[#241A15] hover:bg-[#FAF3E7] disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-medium"
+                              aria-label={`Decrease quantity of ${item.name}`}
+                            >
+                              -
+                            </button>
+                            <span className="w-8 text-center font-sans font-semibold text-xs text-[#241A15]">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateQuantity(item.productId, item.quantity + 1)
+                              }
+                              disabled={Boolean(
+                                typeof item.stock === "number" &&
+                                  item.quantity >= item.stock
+                              )}
+                              className="w-8 h-8 flex items-center justify-center text-[#241A15] hover:bg-[#FAF3E7] disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-medium"
+                              aria-label={`Increase quantity of ${item.name}`}
+                            >
+                              +
+                            </button>
+                          </div>
+
+                          {/* Remove from Cart */}
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(item.productId)}
+                            className="text-[11px] font-sans text-[#8B2626] hover:text-red-700 underline tracking-wider uppercase transition-colors min-h-[44px] flex items-center px-2"
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Continue Shopping Link */}
@@ -200,13 +291,17 @@ export default function CartPage() {
 
                 <div className="space-y-3 text-xs sm:text-sm font-sans text-[#3A2115]/80">
                   <div className="flex items-center justify-between">
-                    <span>Subtotal ({totalItems} items)</span>
-                    <span className="font-semibold text-[#241A15]">{formattedTotalAmount}</span>
+                    <span>Subtotal ({totalItems} {totalItems === 1 ? "saree" : "sarees"})</span>
+                    <span className="font-semibold text-[#241A15]">
+                      {formattedTotalAmount}
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <span>Insured Delivery</span>
-                    <span className="text-[#075E5A] font-medium">Complimentary</span>
+                    <span className="text-[#075E5A] font-medium">
+                      Complimentary
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-[#3A2115]/60">
@@ -215,25 +310,46 @@ export default function CartPage() {
                   </div>
 
                   <div className="border-t border-[#B58A45]/25 pt-3 flex items-baseline justify-between text-base sm:text-lg">
-                    <span className="font-serif text-[#241A15] font-medium">Estimated Total</span>
-                    <span className="font-sans font-bold text-[#075E5A]">{formattedTotalAmount}</span>
+                    <span className="font-serif text-[#241A15] font-medium">
+                      Estimated Total
+                    </span>
+                    <span className="font-sans font-bold text-[#075E5A]">
+                      {formattedTotalAmount}
+                    </span>
                   </div>
                 </div>
+
+                {/* Conflict Notice if stock issue detected */}
+                {hasStockIssue && (
+                  <div className="p-3 bg-amber-50 border border-amber-300 rounded-xs text-[11px] text-amber-900">
+                    Please adjust quantities or remove unavailable sarees before proceeding to checkout.
+                  </div>
+                )}
 
                 {/* Checkout Action Button */}
                 <button
                   type="button"
-                  onClick={() => alert("Checkout and payment integration will be activated in the upcoming chapter.")}
-                  className="w-full h-12 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-[0.18em] uppercase transition-all duration-300 shadow-sm hover:shadow-md flex items-center justify-center gap-2 min-h-[44px]"
+                  disabled={hasStockIssue}
+                  onClick={() =>
+                    alert(
+                      "Secure payment gateway integration will be initialized in the checkout chapter. Adding to cart has preserved inventory."
+                    )
+                  }
+                  className={cn(
+                    "w-full h-12 rounded-xs font-sans font-semibold text-xs tracking-[0.18em] uppercase transition-all duration-300 shadow-sm flex items-center justify-center gap-2 min-h-[44px]",
+                    hasStockIssue
+                      ? "bg-stone-300 text-stone-500 cursor-not-allowed"
+                      : "bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] hover:shadow-md"
+                  )}
                 >
-                  <span>Proceed to Checkout</span>
+                  <span>{hasStockIssue ? "Adjust Quantities to Proceed" : "Proceed to Checkout"}</span>
                   <span aria-hidden="true">→</span>
                 </button>
 
                 {/* Trust Badges */}
                 <div className="pt-3 border-t border-[#B58A45]/15 space-y-2 text-[11px] text-[#3A2115]/70 font-sans">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm">🛡️</span>
+                    <span className="text-sm">🏛️</span>
                     <span>100% Certified Silk Mark Guarantee</span>
                   </div>
                   <div className="flex items-center gap-2">

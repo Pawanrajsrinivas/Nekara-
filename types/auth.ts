@@ -22,6 +22,11 @@ export interface CartItem {
   fabric?: string;
   color?: string;
   categoryName?: string;
+  nameSnapshot?: string;
+  priceSnapshot?: number;
+  originalPriceSnapshot?: number;
+  imageSnapshot?: string;
+  addedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }

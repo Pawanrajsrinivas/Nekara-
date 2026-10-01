@@ -56,7 +56,13 @@ const SECONDARY_STYLES: StyleItem[] = [
   },
 ];
 
-export function ShopByStyle() {
+interface ShopByStyleProps {
+  title?: string;
+  subtitle?: string;
+  categoryIds?: string[];
+}
+
+export function ShopByStyle({ title = "Shop by Style", subtitle = "CURATED COLLECTIONS" }: ShopByStyleProps = {}) {
   return (
     <section
       aria-label="Shop Sarees by Style"
@@ -71,11 +77,11 @@ export function ShopByStyle() {
             <div className="flex items-center gap-2 mb-1.5">
               <span className="w-5 sm:w-6 h-[1px] bg-[#B58A45]" />
               <span className="font-sans text-[10px] sm:text-xs font-semibold uppercase tracking-[0.26em] text-[#B58A45]">
-                CURATED COLLECTIONS
+                {subtitle}
               </span>
             </div>
             <h2 className="font-serif text-xl sm:text-3xl lg:text-[34px] font-normal tracking-wide text-[#241A15]">
-              Shop by Style
+              {title}
             </h2>
           </div>
 

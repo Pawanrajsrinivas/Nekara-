@@ -1,0 +1,100 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated()
+        && exists(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.active == true
+        && get(
+          /databases/$(database)/documents/admins/$(request.auth.uid)
+        ).data.role in ['admin', 'superadmin'];
+    }
+
+    // ==========================================
+    // 1. ADMIN AUTHENTICATION
+    // ==========================================
+    match /admins/{uid} {
+      allow read: if isAuthenticated() && request.auth.uid == uid;
+      allow write: if false; // Only manageable via server / console
+    }
+
+    // ==========================================
+    // 2. PRODUCTS (Public Read, Admin Write)
+    // Customers CANNOT modify products or stock.
+    // ==========================================
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 3. CATEGORIES (Public Read, Admin Write)
+    // ==========================================
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 4. HOMEPAGE STOREFRONT (Public Read, Admin Write)
+    // ==========================================
+    match /homeSections/{sectionId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 5. USER PROFILES
+    // Owner can read and write their own profile.
+    // ==========================================
+    match /users/{uid} {
+      allow read, create, update, delete: if isOwner(uid);
+    }
+
+    // ==========================================
+    // 6. USER SHOP BAG / CART
+    // Canonical path: /carts/{userId} and /carts/{userId}/items/{itemId}
+    // Only the authenticated owner can access their own cart.
+    // ==========================================
+    match /carts/{userId} {
+      allow read, create, update, delete: if isOwner(userId);
+
+      match /items/{itemId} {
+        allow read, create, update, delete: if isOwner(userId);
+      }
+    }
+
+    // ==========================================
+    // 7. ORDERS
+    // Customers can read their own orders.
+    // Admins can read & update all orders.
+    // ==========================================
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ==========================================
+    // 8. FALLBACK (Closed by Default)
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

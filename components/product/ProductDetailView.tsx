@@ -20,7 +20,7 @@ interface ProductDetailViewProps {
 export function ProductDetailView({ product, relatedProducts = [] }: ProductDetailViewProps) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const { addToCart } = useCart();
+  const { addToCart, cartError, clearCartError } = useCart();
 
   const images = product.images && product.images.length > 0 ? product.images : [product.image];
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -32,6 +32,7 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
   const activeImage = images[selectedImageIndex] || product.image;
 
   const handleQuantityChange = (delta: number) => {
+    clearCartError();
     setQuantity((prev) => {
       const next = prev + delta;
       if (next < 1) return 1;
@@ -41,6 +42,8 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
   };
 
   const handleAddToCart = async () => {
+    clearCartError();
+
     // If client is not signed in, redirect to login while preserving destination & cart action
     if (!isAuthenticated) {
       const dest = `/product/${encodeURIComponent(product.slug || product.id)}`;
@@ -53,7 +56,7 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
       setIsAddedToCart(true);
       setTimeout(() => {
         setIsAddedToCart(false);
-      }, 2800);
+      }, 4000);
     }
   };
 
@@ -247,7 +250,7 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                   "w-2.5 h-2.5 rounded-full inline-block",
                   isOutOfStock
                     ? "bg-red-500"
-                    : product.availability === "Low Stock"
+                    : product.stock === 1
                     ? "bg-amber-500 animate-pulse"
                     : "bg-[#075E5A]"
                 )}
@@ -255,7 +258,9 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
               <span className="text-xs font-sans font-medium text-[#241A15]">
                 {isOutOfStock
                   ? "Sold Out — Made to Order Inquiries Welcome"
-                  : product.availability === "Low Stock"
+                  : product.stock === 1
+                  ? "Only 1 left in stock — Order soon"
+                  : product.stock < 5
                   ? `Only ${product.stock} left in stock — Order soon`
                   : "In Stock — Dispatched within 24 to 48 hours"}
               </span>
@@ -298,7 +303,7 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
             </div>
 
             {/* Quantity Selector + Add To Bag Actions */}
-            <div className="space-y-4 mb-8">
+            <div className="space-y-3 mb-8">
               <div className="flex items-center gap-4">
                 {/* Quantity Control */}
                 <div className="flex items-center border border-[#B58A45]/40 rounded-xs bg-[#FFFBF5]">
@@ -343,6 +348,37 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                   <span>{isAddedToCart ? "ADDED TO YOUR BAG ✓" : isOutOfStock ? "SOLD OUT" : "ADD TO SHOPPING BAG"}</span>
                 </button>
               </div>
+
+              {/* Added to Bag Confirmation Notice */}
+              {isAddedToCart && (
+                <div className="flex items-center justify-between p-3 bg-[#075E5A]/10 border border-[#075E5A]/30 rounded-xs text-xs text-[#075E5A] animate-in fade-in slide-in-from-top-1 duration-200">
+                  <span className="flex items-center gap-2 font-medium">
+                    <span className="font-bold">✓</span>
+                    <span>Added to your Shop Bag</span>
+                  </span>
+                  <Link
+                    href="/cart"
+                    className="font-semibold underline hover:text-[#02221D] tracking-wider uppercase text-[11px]"
+                  >
+                    View Bag →
+                  </Link>
+                </div>
+              )}
+
+              {/* Cart Error / Stock Limit Notice */}
+              {cartError && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xs text-xs text-amber-900 flex items-center justify-between animate-in fade-in duration-200">
+                  <span>{cartError}</span>
+                  <button
+                    type="button"
+                    onClick={clearCartError}
+                    className="text-amber-700 hover:text-amber-950 font-bold px-2"
+                    aria-label="Dismiss error"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
               {/* WhatsApp Concierge Consultation Link */}
               <a

@@ -10,6 +10,7 @@ import {
   onSnapshot,
   serverTimestamp,
   getDocs,
+  getDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "./AuthContext";
@@ -23,10 +24,13 @@ interface CartContextType {
   totalAmount: number;
   formattedTotalAmount: string;
   loading: boolean;
+  cartError: string | null;
+  clearCartError: () => void;
   addToCart: (product: NekaraProduct, quantity?: number) => Promise<boolean>;
   updateQuantity: (productId: string, quantity: number) => Promise<void>;
   removeFromCart: (productId: string) => Promise<void>;
   clearCart: () => Promise<void>;
+  refreshLiveStock: () => Promise<void>;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -35,9 +39,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated } = useAuth();
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [cartError, setCartError] = useState<string | null>(null);
 
-  // Real-time synchronization with Firestore subcollection /users/{uid}/cart
+  const clearCartError = useCallback(() => {
+    setCartError(null);
+  }, []);
+
+  /**
+   * Helper to log diagnostic information safely in development without exposing secrets
+   */
+  const logDiagnostic = useCallback(
+    (operation: string, subPath?: string) => {
+      if (process.env.NODE_ENV === "development" && user) {
+        const fullPath = subPath
+          ? `carts/${user.uid}/${subPath}`
+          : `carts/${user.uid}`;
+        console.log(
+          `[NEKARA CART] Authenticated UID: ${user.uid} | Path: ${fullPath} | Operation: ${operation}`
+        );
+      }
+    },
+    [user]
+  );
+
+  /**
+   * Real-time synchronization with Firestore canonical path:
+   * /carts/{userId}/items/{productId}
+   */
   useEffect(() => {
+    // If not authenticated or Firebase not ready, clear in-memory cart state immediately
     if (!isAuthenticated || !user || !db || typeof db.type !== "string") {
       setItems([]);
       setLoading(false);
@@ -45,135 +75,353 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
 
     setLoading(true);
-    const cartRef = collection(db, "users", user.uid, "cart");
+    logDiagnostic("onSnapshot (listener start)", "items");
+
+    // Canonical Firestore subcollection: /carts/{uid}/items
+    const cartItemsRef = collection(db, "carts", user.uid, "items");
 
     const unsubscribe = onSnapshot(
-      cartRef,
-      (snapshot) => {
+      cartItemsRef,
+      async (snapshot) => {
         const cartList: CartItem[] = [];
-        snapshot.forEach((docSnap) => {
+
+        for (const docSnap of snapshot.docs) {
           const data = docSnap.data();
+          const productId = data.productId || docSnap.id;
+
+          // Snapshot values saved when added
+          const name = data.nameSnapshot || data.name || "Handcrafted Saree";
+          const price =
+            typeof data.priceSnapshot === "number"
+              ? data.priceSnapshot
+              : typeof data.price === "number"
+              ? data.price
+              : parseFloat(data.price) || 0;
+          const originalPrice =
+            data.originalPriceSnapshot || data.originalPrice
+              ? Number(data.originalPriceSnapshot || data.originalPrice)
+              : undefined;
+          const image =
+            data.imageSnapshot || data.image || "/images/categories/silk-sarees.jpg";
+          const quantity = typeof data.quantity === "number" ? data.quantity : 1;
+
           cartList.push({
             id: docSnap.id,
-            productId: data.productId || docSnap.id,
-            name: data.name || "Handcrafted Saree",
-            slug: data.slug || docSnap.id,
-            price: typeof data.price === "number" ? data.price : parseFloat(data.price) || 0,
-            originalPrice: data.originalPrice ? Number(data.originalPrice) : undefined,
-            image: data.image || "/images/categories/silk-sarees.jpg",
-            quantity: typeof data.quantity === "number" ? data.quantity : 1,
+            productId,
+            name,
+            nameSnapshot: data.nameSnapshot || name,
+            slug: data.slug || productId,
+            price,
+            priceSnapshot: price,
+            originalPrice,
+            originalPriceSnapshot: originalPrice,
+            image,
+            imageSnapshot: image,
+            quantity,
             stock: typeof data.stock === "number" ? data.stock : 10,
             fabric: data.fabric || "",
             color: data.color || "",
             categoryName: data.categoryName || "",
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : undefined,
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : undefined,
+            addedAt: data.addedAt?.toDate
+              ? data.addedAt.toDate().toISOString()
+              : undefined,
+            createdAt: data.createdAt?.toDate
+              ? data.createdAt.toDate().toISOString()
+              : undefined,
+            updatedAt: data.updatedAt?.toDate
+              ? data.updatedAt.toDate().toISOString()
+              : undefined,
           });
-        });
+        }
+
         setItems(cartList);
         setLoading(false);
       },
       (error) => {
-        console.warn("[NEKARA Cart] Real-time cart error:", error);
+        console.error(
+          `[NEKARA CART] Listener error at carts/${user.uid}/items:`,
+          error
+        );
+        if (error.code === "permission-denied") {
+          setCartError(
+            "Please ensure you are signed in with an authorized account to access your Shop Bag."
+          );
+        } else {
+          setCartError("We couldn't synchronize your Shop Bag. Please try again.");
+        }
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
-  }, [isAuthenticated, user]);
+    return () => {
+      logDiagnostic("onSnapshot (listener unsubscribe)", "items");
+      unsubscribe();
+    };
+  }, [isAuthenticated, user, logDiagnostic]);
 
-  // Compute total item count (sum of all quantities)
+  /**
+   * Re-verify current live stock from /products/{productId} for all items in the cart
+   */
+  const refreshLiveStock = useCallback(async () => {
+    if (!isAuthenticated || !user || !db || items.length === 0) return;
+
+    try {
+      const updatedStockMap = new Map<string, number>();
+
+      for (const item of items) {
+        const prodDoc = await getDoc(doc(db, "products", item.productId));
+        if (prodDoc.exists()) {
+          const prodData = prodDoc.data();
+          const liveStock =
+            typeof prodData.stock === "number"
+              ? prodData.stock
+              : parseInt(prodData.stock, 10) || 0;
+          updatedStockMap.set(item.productId, liveStock);
+        }
+      }
+
+      setItems((prevItems) =>
+        prevItems.map((item) => {
+          if (updatedStockMap.has(item.productId)) {
+            const liveStock = updatedStockMap.get(item.productId)!;
+            return { ...item, stock: liveStock };
+          }
+          return item;
+        })
+      );
+    } catch (err) {
+      console.warn("[NEKARA Cart] Could not refresh live product stock:", err);
+    }
+  }, [isAuthenticated, user, items]);
+
+  // Compute total item count (sum of all quantities: Saree A x 1 + Saree B x 2 = 3)
   const totalItems = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
   // Compute total price amount
-  const totalAmount = items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0);
+  const totalAmount = items.reduce(
+    (sum, item) => sum + (item.price || 0) * (item.quantity || 1),
+    0
+  );
   const formattedTotalAmount = formatINR(totalAmount);
 
-  // Add product to Firestore Cart
-  const addToCart = async (product: NekaraProduct, qty = 1): Promise<boolean> => {
+  /**
+   * Add a product to the authenticated user's Firestore Cart.
+   *
+   * BUSINESS RULE: Adding to cart DOES NOT decrement product inventory.
+   * Stock in /products/{productId} remains untouched.
+   */
+  const addToCart = async (
+    product: NekaraProduct,
+    qty = 1
+  ): Promise<boolean> => {
+    setCartError(null);
+
+    // 1. Check authentication
     if (!isAuthenticated || !user) {
+      setCartError("Please sign in to add items to your Shop Bag.");
       return false;
     }
 
     if (!db || typeof db.type !== "string") {
-      console.error("[NEKARA Cart] Database is not available.");
+      setCartError("Shop Bag service is temporarily unavailable.");
+      return false;
+    }
+
+    // 2. Check product availability & stock
+    const availableStock =
+      typeof product.stock === "number" ? product.stock : 0;
+    if (availableStock <= 0 || product.availability === "Out of Stock") {
+      setCartError("This handcrafted saree is currently sold out.");
+      return false;
+    }
+
+    // 3. Check requested quantity against existing cart quantity
+    const existing = items.find((i) => i.productId === product.id);
+    const currentQty = existing ? existing.quantity : 0;
+    const requestedTotal = currentQty + qty;
+
+    if (requestedTotal > availableStock) {
+      setCartError(
+        `Only ${availableStock} available in stock. You already have ${currentQty} in your bag.`
+      );
       return false;
     }
 
     try {
-      const cartItemRef = doc(db, "users", user.uid, "cart", product.id);
-      const existing = items.find((i) => i.productId === product.id);
-      const newQuantity = existing ? existing.quantity + qty : qty;
+      logDiagnostic(`setDoc (addToCart qty: ${qty})`, `items/${product.id}`);
+
+      // Canonical Firestore item path: /carts/{uid}/items/{productId}
+      const cartItemRef = doc(db, "carts", user.uid, "items", product.id);
 
       const payload = {
         productId: product.id,
-        name: product.name,
+        quantity: requestedTotal,
+        nameSnapshot: product.name,
+        priceSnapshot: product.price,
+        originalPriceSnapshot: product.originalPrice || null,
+        imageSnapshot: product.image,
         slug: product.slug,
-        price: product.price,
-        originalPrice: product.originalPrice || null,
-        image: product.image,
-        quantity: newQuantity,
-        stock: product.stock || 10,
         fabric: product.fabric || "",
         color: product.color || "",
         categoryName: product.categoryName || product.category || "",
+        stock: availableStock,
         updatedAt: serverTimestamp(),
       };
 
       if (!existing) {
-        (payload as any).createdAt = serverTimestamp();
+        (payload as any).addedAt = serverTimestamp();
       }
 
       await setDoc(cartItemRef, payload, { merge: true });
+
+      // Update / ensure parent cart document exists: /carts/{uid}
+      const cartDocRef = doc(db, "carts", user.uid);
+      await setDoc(
+        cartDocRef,
+        {
+          userId: user.uid,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      // NOTICE: We strictly DO NOT decrement /products/{productId}.stock!
       return true;
-    } catch (err) {
-      console.error("[NEKARA Cart] Error adding to cart:", err);
+    } catch (err: any) {
+      console.error(
+        `[NEKARA CART] Error writing to carts/${user.uid}/items/${product.id}:`,
+        err
+      );
+      if (err.code === "permission-denied") {
+        setCartError(
+          "We could not update your Shop Bag due to permissions. Please verify you are signed in."
+        );
+      } else {
+        setCartError("Failed to add saree to your Shop Bag. Please try again.");
+      }
       return false;
     }
   };
 
-  // Update item quantity
-  const updateQuantity = async (productId: string, quantity: number): Promise<void> => {
+  /**
+   * Update item quantity in the cart.
+   *
+   * BUSINESS RULE: Does NOT modify product stock.
+   */
+  const updateQuantity = async (
+    productId: string,
+    quantity: number
+  ): Promise<void> => {
+    setCartError(null);
     if (!isAuthenticated || !user || !db || typeof db.type !== "string") return;
 
     try {
-      const cartItemRef = doc(db, "users", user.uid, "cart", productId);
+      const cartItemRef = doc(db, "carts", user.uid, "items", productId);
+
       if (quantity <= 0) {
+        logDiagnostic("deleteDoc (quantity <= 0)", `items/${productId}`);
         await deleteDoc(cartItemRef);
       } else {
+        // Enforce stock ceiling if available
+        const currentItem = items.find((i) => i.productId === productId);
+        let finalQuantity = quantity;
+
+        if (currentItem?.stock && quantity > currentItem.stock) {
+          finalQuantity = currentItem.stock;
+          setCartError(`Only ${currentItem.stock} available in stock.`);
+        }
+
+        logDiagnostic(`updateDoc (quantity: ${finalQuantity})`, `items/${productId}`);
         await updateDoc(cartItemRef, {
-          quantity,
+          quantity: finalQuantity,
           updatedAt: serverTimestamp(),
         });
       }
-    } catch (err) {
-      console.error("[NEKARA Cart] Error updating quantity:", err);
+
+      // Update parent document timestamp
+      const cartDocRef = doc(db, "carts", user.uid);
+      await setDoc(
+        cartDocRef,
+        {
+          userId: user.uid,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (err: any) {
+      console.error(
+        `[NEKARA CART] Error updating quantity at carts/${user.uid}/items/${productId}:`,
+        err
+      );
+      setCartError("Could not update item quantity. Please try again.");
     }
   };
 
-  // Remove item
+  /**
+   * Remove a product from the authenticated user's cart.
+   *
+   * BUSINESS RULE: Does NOT modify product stock.
+   */
   const removeFromCart = async (productId: string): Promise<void> => {
+    setCartError(null);
     if (!isAuthenticated || !user || !db || typeof db.type !== "string") return;
 
     try {
-      const cartItemRef = doc(db, "users", user.uid, "cart", productId);
+      logDiagnostic("deleteDoc (removeFromCart)", `items/${productId}`);
+      const cartItemRef = doc(db, "carts", user.uid, "items", productId);
       await deleteDoc(cartItemRef);
-    } catch (err) {
-      console.error("[NEKARA Cart] Error removing from cart:", err);
+
+      // Update parent document timestamp
+      const cartDocRef = doc(db, "carts", user.uid);
+      await setDoc(
+        cartDocRef,
+        {
+          userId: user.uid,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (err: any) {
+      console.error(
+        `[NEKARA CART] Error removing from carts/${user.uid}/items/${productId}:`,
+        err
+      );
+      setCartError("Could not remove saree from your Shop Bag.");
     }
   };
 
-  // Clear all items
+  /**
+   * Clear all items from the authenticated user's cart.
+   *
+   * BUSINESS RULE: Does NOT modify product stock.
+   */
   const clearCart = async (): Promise<void> => {
+    setCartError(null);
     if (!isAuthenticated || !user || !db || typeof db.type !== "string") return;
 
     try {
-      const cartRef = collection(db, "users", user.uid, "cart");
-      const snap = await getDocs(cartRef);
+      logDiagnostic("deleteDoc (clearCart batch)", "items");
+      const cartItemsRef = collection(db, "carts", user.uid, "items");
+      const snap = await getDocs(cartItemsRef);
       const deletePromises = snap.docs.map((d) => deleteDoc(d.ref));
       await Promise.all(deletePromises);
-    } catch (err) {
-      console.error("[NEKARA Cart] Error clearing cart:", err);
+
+      // Update parent cart doc
+      const cartDocRef = doc(db, "carts", user.uid);
+      await setDoc(
+        cartDocRef,
+        {
+          userId: user.uid,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (err: any) {
+      console.error(
+        `[NEKARA CART] Error clearing carts/${user.uid}/items:`,
+        err
+      );
+      setCartError("Could not clear your Shop Bag.");
     }
   };
 
@@ -183,10 +431,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     totalAmount,
     formattedTotalAmount,
     loading,
+    cartError,
+    clearCartError,
     addToCart,
     updateQuantity,
     removeFromCart,
     clearCart,
+    refreshLiveStock,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

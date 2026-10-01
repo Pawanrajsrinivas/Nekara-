@@ -45,3 +45,27 @@ export interface NekaraCategory {
   description?: string;
   active?: boolean;
 }
+
+export type HomeSectionMode = "manual" | "automatic";
+
+export type HomeSectionType =
+  | "hero"
+  | "trending"
+  | "shopByStyle"
+  | "signature"
+  | "newArrivals"
+  | "offers";
+
+export interface HomeSection {
+  id: string;
+  title: string;
+  subtitle?: string;
+  enabled: boolean;
+  mode: HomeSectionMode;
+  productIds: string[];
+  categoryIds?: string[];
+  displayOrder: number;
+  limit: number;
+  updatedAt?: any;
+}
+
