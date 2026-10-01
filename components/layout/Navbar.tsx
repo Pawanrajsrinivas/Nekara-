@@ -9,6 +9,7 @@ import { MAIN_NAV_ITEMS } from "@/data/navigation";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import {
   SearchIcon,
   WishlistIcon,
@@ -16,6 +17,7 @@ import {
   CartIcon,
   MenuIcon,
   ChevronDownIcon,
+  OrdersIcon,
 } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
 
@@ -24,9 +26,11 @@ export function Navbar() {
   const isHomePage = pathname === "/";
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
 
-  const { user, profile, isAuthenticated } = useAuth();
+  const { user, profile, isAuthenticated, logout } = useAuth();
   const { totalItems } = useCart();
+  const { wishlistCount } = useWishlist();
   const avatarUrl = profile?.photoURL || user?.photoURL;
 
   // An opaque cream navbar is used when scrolled OR when on interior pages like /shop
@@ -164,38 +168,119 @@ export function Navbar() {
                     ? "text-[#241A15] hover:text-[#075E5A]"
                     : "text-[#FAF5ED] hover:text-[#D4AF37] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
                 )}
-                aria-label="View wishlist"
+                aria-label={`View wishlist with ${wishlistCount} items`}
               >
                 <WishlistIcon size={19} strokeWidth={1.5} />
+                {isAuthenticated && wishlistCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 bg-[#B58A45] text-[#FAF5ED] text-[9px] font-bold rounded-full flex items-center justify-center border border-[#FAF5ED] shadow-sm animate-in fade-in zoom-in duration-200">
+                    {wishlistCount > 99 ? "99+" : wishlistCount}
+                  </span>
+                )}
               </Link>
 
-              {/* Account Button (Desktop only) */}
-              <Link
-                href={isAuthenticated ? "/account" : "/login?redirect=/account"}
-                className={cn(
-                  "hidden md:inline-flex items-center justify-center p-1.5 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B58A45]",
-                  isOpaque
-                    ? "text-[#241A15] hover:text-[#075E5A]"
-                    : "text-[#FAF5ED] hover:text-[#D4AF37] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
-                )}
-                aria-label={isAuthenticated ? "Client account" : "Sign in to your account"}
-                title={isAuthenticated ? (profile?.displayName || user?.email || "Account") : "Sign In"}
+              {/* Account Button & Luxury Dropdown (Desktop only) */}
+              <div
+                className="relative hidden md:block"
+                onMouseEnter={() => setAccountDropdownOpen(true)}
+                onMouseLeave={() => setAccountDropdownOpen(false)}
               >
-                {isAuthenticated && avatarUrl ? (
-                  <div className="w-5 h-5 rounded-full overflow-hidden border border-[#B58A45]/60 relative">
-                    <Image
-                      src={avatarUrl}
-                      alt={profile?.displayName || "Account"}
-                      width={20}
-                      height={20}
-                      className="w-full h-full object-cover"
-                      unoptimized
-                    />
+                <Link
+                  href={isAuthenticated ? "/account" : "/login?redirect=/account"}
+                  onClick={() => setAccountDropdownOpen(false)}
+                  className={cn(
+                    "inline-flex items-center justify-center p-1.5 rounded-full transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B58A45]",
+                    isOpaque
+                      ? "text-[#241A15] hover:text-[#075E5A]"
+                      : "text-[#FAF5ED] hover:text-[#D4AF37] drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)]"
+                  )}
+                  aria-label={isAuthenticated ? "Client account" : "Sign in to your account"}
+                  title={isAuthenticated ? (profile?.displayName || user?.email || "Account") : "Sign In"}
+                >
+                  {isAuthenticated && avatarUrl ? (
+                    <div className="w-5 h-5 rounded-full overflow-hidden border border-[#B58A45]/60 relative">
+                      <Image
+                        src={avatarUrl}
+                        alt={profile?.displayName || "Account"}
+                        width={20}
+                        height={20}
+                        className="w-full h-full object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  ) : (
+                    <AccountIcon size={19} strokeWidth={1.5} />
+                  )}
+                </Link>
+
+                {/* Desktop Account Dropdown Menu */}
+                {isAuthenticated && accountDropdownOpen && (
+                  <div className="absolute right-0 top-full pt-2 w-56 z-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="bg-[#FFFBF5] rounded-xs border border-[#B58A45]/30 shadow-[0_8px_30px_rgba(58,33,21,0.12)] p-2">
+                      <div className="px-3 py-2 border-b border-[#B58A45]/20">
+                        <p className="text-[10px] font-sans font-semibold uppercase tracking-wider text-[#B58A45]">
+                          Client Portal
+                        </p>
+                        <p className="text-xs font-serif text-[#241A15] font-normal truncate mt-0.5">
+                          {profile?.displayName || user?.displayName || user?.email?.split("@")[0] || "Valued Patron"}
+                        </p>
+                      </div>
+
+                      <ul className="py-1 text-xs font-sans">
+                        <li>
+                          <Link
+                            href="/account"
+                            onClick={() => setAccountDropdownOpen(false)}
+                            className="flex items-center gap-2.5 px-3 py-2 text-[#241A15] hover:text-[#075E5A] hover:bg-[#FAF3E7] rounded-xs transition-colors"
+                          >
+                            <AccountIcon size={15} className="text-[#B58A45]" />
+                            <span>My Account</span>
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            href="/orders"
+                            onClick={() => setAccountDropdownOpen(false)}
+                            className="flex items-center gap-2.5 px-3 py-2 text-[#241A15] hover:text-[#075E5A] hover:bg-[#FAF3E7] rounded-xs transition-colors"
+                          >
+                            <OrdersIcon size={15} className="text-[#B58A45]" />
+                            <span>My Orders</span>
+                          </Link>
+                        </li>
+                        <li>
+                          <Link
+                            href="/wishlist"
+                            onClick={() => setAccountDropdownOpen(false)}
+                            className="flex items-center justify-between px-3 py-2 text-[#241A15] hover:text-[#075E5A] hover:bg-[#FAF3E7] rounded-xs transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <WishlistIcon size={15} className="text-[#B58A45]" />
+                              <span>Wishlist</span>
+                            </div>
+                            {wishlistCount > 0 && (
+                              <span className="min-w-[18px] h-[18px] px-1 bg-[#FAF3E7] text-[#075E5A] border border-[#B58A45]/40 text-[10px] font-bold rounded-full flex items-center justify-center">
+                                {wishlistCount}
+                              </span>
+                            )}
+                          </Link>
+                        </li>
+                      </ul>
+
+                      <div className="pt-1 border-t border-[#B58A45]/20">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            setAccountDropdownOpen(false);
+                            await logout();
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-xs text-[#8B2626] hover:bg-[#FAF0F0] rounded-xs transition-colors font-medium tracking-wide uppercase text-[11px]"
+                        >
+                          Sign Out
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <AccountIcon size={19} strokeWidth={1.5} />
                 )}
-              </Link>
+              </div>
 
               {/* Shopping Bag / Cart Button (Tablet & Desktop) */}
               <Link

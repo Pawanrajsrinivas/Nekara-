@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 import { NekaraProduct } from "@/types/product";
 import { WishlistIcon, CartIcon } from "@/components/ui/Icons";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
@@ -21,11 +22,12 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const { addToCart, cartError, clearCartError } = useCart();
+  const { isWishlisted: checkIsWishlisted, toggleWishlist: contextToggleWishlist } = useWishlist();
 
   const images = product.images && product.images.length > 0 ? product.images : [product.image];
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const isWishlisted = checkIsWishlisted(product.id);
   const [isAddedToCart, setIsAddedToCart] = useState(false);
   const [activeTab, setActiveTab] = useState<"description" | "details" | "care" | "shipping">("description");
 
@@ -60,8 +62,8 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
     }
   };
 
-  const toggleWishlist = () => {
-    setIsWishlisted((prev) => !prev);
+  const toggleWishlist = async () => {
+    await contextToggleWishlist(product);
   };
 
   const isOutOfStock = product.availability === "Out of Stock" || product.stock <= 0;

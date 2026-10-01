@@ -5,10 +5,11 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { MOBILE_PRIMARY_NAV_ITEMS, MOBILE_SECONDARY_NAV_ITEMS } from "@/data/navigation";
-import { CloseIcon, ChevronDownIcon, WishlistIcon, CartIcon, AccountIcon } from "@/components/ui/Icons";
+import { CloseIcon, ChevronDownIcon, WishlistIcon, CartIcon, AccountIcon, OrdersIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { useWishlist } from "@/context/WishlistContext";
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
   const pathname = usePathname();
   const { user, profile, isAuthenticated, logout } = useAuth();
   const { totalItems } = useCart();
+  const { wishlistCount } = useWishlist();
 
   // Prevent body scrolling when the mobile drawer is open
   useEffect(() => {
@@ -231,6 +233,9 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                   if (item.label === "Cart") {
                     return isAuthenticated ? "/cart" : "/login?redirect=/cart";
                   }
+                  if (item.label === "Wishlist") {
+                    return isAuthenticated ? "/wishlist" : "/login?redirect=/wishlist";
+                  }
                   if (item.label === "My Account" || item.label === "My Orders") {
                     return isAuthenticated ? item.href : `/login?redirect=${encodeURIComponent(item.href)}`;
                   }
@@ -241,6 +246,8 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                   switch (item.label) {
                     case "Wishlist":
                       return <WishlistIcon size={15} strokeWidth={1.4} className="text-[#B58A45]" />;
+                    case "My Orders":
+                      return <OrdersIcon size={15} strokeWidth={1.4} className="text-[#B58A45]" />;
                     case "Cart":
                       return <CartIcon size={15} strokeWidth={1.4} className="text-[#B58A45]" />;
                     case "My Account":
@@ -264,6 +271,11 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
                       {item.label === "Cart" && isAuthenticated && totalItems > 0 && (
                         <span className="min-w-[17px] h-[17px] px-1 bg-[#851E2C] text-[#FAF5ED] text-[9px] font-bold rounded-full flex items-center justify-center border border-[#FAF5ED]/40">
                           {totalItems > 99 ? "99+" : totalItems}
+                        </span>
+                      )}
+                      {item.label === "Wishlist" && isAuthenticated && wishlistCount > 0 && (
+                        <span className="min-w-[17px] h-[17px] px-1 bg-[#B58A45] text-[#FAF5ED] text-[9px] font-bold rounded-full flex items-center justify-center border border-[#FAF5ED]/40">
+                          {wishlistCount > 99 ? "99+" : wishlistCount}
                         </span>
                       )}
                     </Link>

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { NekaraProduct } from "@/types/product";
 import { WishlistIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
+import { useWishlist } from "@/context/WishlistContext";
 
 interface ProductCardProps {
   product: NekaraProduct;
@@ -14,13 +15,14 @@ interface ProductCardProps {
 }
 
 export function ProductCard({ product, priority = false, className }: ProductCardProps) {
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const { isWishlisted: checkIsWishlisted, toggleWishlist: contextToggleWishlist } = useWishlist();
+  const isWishlisted = checkIsWishlisted(product.id);
   const [imgError, setImgError] = useState(false);
 
-  const toggleWishlist = (e: React.MouseEvent) => {
+  const toggleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsWishlisted((prev) => !prev);
+    await contextToggleWishlist(product);
   };
 
   // Safe fallback image if product image fails to load

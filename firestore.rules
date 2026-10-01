@@ -80,14 +80,21 @@ service cloud.firestore {
 
     // ==========================================
     // 7. ORDERS
-    // Customers can read their own orders.
-    // Admins can read & update all orders.
+    // Customers can view and query their own orders.
+    // Customers can create their own order during checkout.
+    // Admins have full access to view, update, and manage all orders.
     // ==========================================
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (
+      allow get: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow create, update, delete: if isAdmin();
+      allow list: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        request.resource.data.userId == request.auth.uid || isAdmin()
+      );
+      allow update, delete: if isAdmin();
     }
 
     // ==========================================

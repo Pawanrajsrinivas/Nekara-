@@ -6,6 +6,8 @@ import Link from "next/link";
 import { SareeProduct } from "@/data/sarees";
 import { WishlistIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
+import { useWishlist } from "@/context/WishlistContext";
+import { NekaraProduct } from "@/types/product";
 
 interface SareeCardProps {
   product: SareeProduct;
@@ -14,13 +16,32 @@ interface SareeCardProps {
 }
 
 export function SareeCard({ product, priority = false, className }: SareeCardProps) {
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  const { isWishlisted: checkIsWishlisted, toggleWishlist: contextToggleWishlist } = useWishlist();
+  const isWishlisted = checkIsWishlisted(product.id);
   const [imgError, setImgError] = useState(false);
 
-  const toggleWishlist = (e: React.MouseEvent) => {
+  const toggleWishlist = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsWishlisted((prev) => !prev);
+    const nekaraProd: NekaraProduct = {
+      id: product.id,
+      name: product.name,
+      slug: product.slug || product.id,
+      subtitle: product.type || "",
+      description: "",
+      price: product.price,
+      formattedPrice: product.formattedPrice,
+      image: product.image,
+      images: [product.image],
+      category: product.type,
+      categoryId: "",
+      categoryName: product.type,
+      stock: 10,
+      rating: 4.9,
+      availability: "In Stock",
+      href: product.href,
+    };
+    await contextToggleWishlist(nekaraProd);
   };
 
   return (
