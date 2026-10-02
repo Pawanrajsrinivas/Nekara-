@@ -8,6 +8,8 @@ export interface NekaraProduct {
   shortDescription?: string;
   description: string;
   sku?: string;
+  productId?: string;
+  design?: string;
   price: number;
   salePrice?: number;
   originalPrice?: number;
