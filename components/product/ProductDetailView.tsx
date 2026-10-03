@@ -24,8 +24,86 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
   const { addToCart, cartError, clearCartError } = useCart();
   const { isWishlisted: checkIsWishlisted, toggleWishlist: contextToggleWishlist } = useWishlist();
 
-  const images = product.images && product.images.length > 0 ? product.images : [product.image];
+  // Deduplicated Ordered Images:
+  // 1. Main Image (first)
+  // 2. Design Image (second, if present & distinct)
+  // 3. Other images (remaining, deduplicated)
+  const images = React.useMemo(() => {
+    const list: string[] = [];
+
+    // 1. Main image first
+    const mainImg = (product.image || (Array.isArray(product.images) && product.images[0]) || "").trim();
+    if (mainImg) {
+      list.push(mainImg);
+    }
+
+    // 2. Design image second (if present)
+    const designImg = (product.designImage || "").trim();
+    if (designImg && !list.includes(designImg)) {
+      list.push(designImg);
+    }
+
+    // 3. Remaining product images
+    if (Array.isArray(product.images)) {
+      for (const raw of product.images) {
+        if (typeof raw === "string") {
+          const trimmed = raw.trim();
+          if (trimmed && !list.includes(trimmed)) {
+            list.push(trimmed);
+          }
+        }
+      }
+    }
+
+    return list.length > 0 ? list : [product.image || "/images/categories/silk-sarees.jpg"];
+  }, [product.image, product.designImage, product.images]);
+
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const thumbnailContainerRef = React.useRef<HTMLDivElement>(null);
+  const touchStartX = React.useRef<number | null>(null);
+  const touchStartY = React.useRef<number | null>(null);
+
+  const goToPrev = () => {
+    setSelectedImageIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
+  const goToNext = () => {
+    setSelectedImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (images.length <= 1) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (images.length <= 1) return;
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+
+    // Horizontal swipe threshold 40px, ensure horizontal > vertical to avoid blocking page scroll
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX < 0) {
+        goToNext();
+      } else {
+        goToPrev();
+      }
+    }
+  };
+
+  React.useEffect(() => {
+    if (thumbnailContainerRef.current) {
+      const activeThumb = thumbnailContainerRef.current.children[selectedImageIndex] as HTMLElement;
+      if (activeThumb?.scrollIntoView) {
+        activeThumb.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      }
+    }
+  }, [selectedImageIndex]);
+
   const [quantity, setQuantity] = useState(1);
   const isWishlisted = checkIsWishlisted(product.id);
   const [isAddedToCart, setIsAddedToCart] = useState(false);
@@ -110,7 +188,10 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
           <div className="lg:col-span-6 xl:col-span-6 flex flex-col-reverse md:flex-row gap-4">
             {/* Vertical Thumbnails List (Desktop) / Horizontal (Mobile) */}
             {images.length > 1 && (
-              <div className="flex md:flex-col gap-3 overflow-x-auto md:overflow-y-auto max-h-[580px] pb-2 md:pb-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0">
+              <div
+                ref={thumbnailContainerRef}
+                className="flex md:flex-col gap-3 overflow-x-auto md:overflow-y-auto max-h-[580px] pb-2 md:pb-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0"
+              >
                 {images.map((imgUrl, index) => {
                   const isSelected = index === selectedImageIndex;
                   return (
@@ -139,8 +220,12 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
               </div>
             )}
 
-            {/* Main Primary Image Display */}
-            <div className="relative flex-1 aspect-[3/4] rounded-xs overflow-hidden bg-[#FAF3E7] border border-[#B58A45]/20 shadow-[0_8px_30px_rgba(58,33,21,0.06)] group">
+            {/* Main Primary Image Display with Touch Swipe and Nav Controls */}
+            <div
+              className="relative flex-1 aspect-[3/4] rounded-xs overflow-hidden bg-[#FAF3E7] border border-[#B58A45]/20 shadow-[0_8px_30px_rgba(58,33,21,0.06)] group touch-pan-y select-none"
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+            >
               <Image
                 src={activeImage}
                 alt={product.name}
@@ -149,6 +234,32 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 600px"
                 className="object-cover transition-transform duration-700 ease-out group-hover:scale-103"
               />
+
+              {/* Prev / Next Chevrons (Mobile visible / Desktop hover) */}
+              {images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={goToPrev}
+                    aria-label="Previous product image"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/85 hover:bg-white text-[#241A15] shadow-md flex items-center justify-center backdrop-blur-xs transition-all opacity-80 md:opacity-0 md:group-hover:opacity-100 hover:scale-105"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goToNext}
+                    aria-label="Next product image"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-white/85 hover:bg-white text-[#241A15] shadow-md flex items-center justify-center backdrop-blur-xs transition-all opacity-80 md:opacity-0 md:group-hover:opacity-100 hover:scale-105"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </>
+              )}
 
               {/* Badge */}
               {product.badge && (
@@ -164,6 +275,15 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                 <div className="absolute bottom-4 left-4 z-10">
                   <span className="inline-block px-2.5 py-1 bg-[#8B2626] text-[#FFFBF5] text-[10px] font-sans font-semibold tracking-wider uppercase rounded-xs shadow-sm">
                     {product.discountPercentage}% OFF
+                  </span>
+                </div>
+              )}
+
+              {/* Slide Counter */}
+              {images.length > 1 && (
+                <div className="absolute bottom-4 right-4 z-10 pointer-events-none">
+                  <span className="inline-block px-2.5 py-1 bg-black/60 backdrop-blur-sm text-white text-[11px] font-mono font-medium rounded-full shadow-sm">
+                    {selectedImageIndex + 1} / {images.length}
                   </span>
                 </div>
               )}

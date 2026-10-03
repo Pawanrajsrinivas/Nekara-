@@ -47,9 +47,9 @@ export function mapDocToProduct(id: string, data: Record<string, any>): NekaraPr
       : undefined;
 
   // Resilient Cloudinary images extraction (handles string[], {url: string}[], or single URL)
-  let images: string[] = [];
+  let rawImages: string[] = [];
   if (Array.isArray(data.images)) {
-    images = data.images
+    rawImages = data.images
       .map((img: any) => {
         if (typeof img === "string") return img.trim();
         if (img && typeof img === "object" && typeof img.url === "string") return img.url.trim();
@@ -57,23 +57,53 @@ export function mapDocToProduct(id: string, data: Record<string, any>): NekaraPr
       })
       .filter((url: string) => url.length > 0);
   } else if (typeof data.image === "string" && data.image.trim()) {
-    images = [data.image.trim()];
+    rawImages = [data.image.trim()];
   }
 
-  // Thumbnail extraction
+  // Thumbnail / Main image extraction
   let thumbnail = "";
   if (typeof data.thumbnail === "string" && data.thumbnail.trim()) {
     thumbnail = data.thumbnail.trim();
   } else if (data.thumbnail && typeof data.thumbnail === "object" && typeof data.thumbnail.url === "string") {
     thumbnail = data.thumbnail.url.trim();
-  } else if (images.length > 0) {
-    thumbnail = images[0];
+  } else if (rawImages.length > 0) {
+    thumbnail = rawImages[0];
   } else {
     thumbnail = "/images/categories/silk-sarees.jpg";
   }
 
-  if (images.length === 0) {
-    images = [thumbnail];
+  // Design Image extraction (optional)
+  let designImage: string | undefined = undefined;
+  if (typeof data.designImage === "string" && data.designImage.trim()) {
+    designImage = data.designImage.trim();
+  } else if (
+    data.designImage &&
+    typeof data.designImage === "object" &&
+    typeof data.designImage.url === "string" &&
+    data.designImage.url.trim()
+  ) {
+    designImage = data.designImage.url.trim();
+  }
+
+  // Ordered and Deduplicated Images:
+  // 1. Main / Thumbnail image (first)
+  // 2. Design Image (second, if present)
+  // 3. Other images (remaining, deduplicated)
+  const orderedImages: string[] = [];
+  if (thumbnail) {
+    orderedImages.push(thumbnail);
+  }
+  if (designImage && !orderedImages.includes(designImage)) {
+    orderedImages.push(designImage);
+  }
+  for (const img of rawImages) {
+    if (img && !orderedImages.includes(img)) {
+      orderedImages.push(img);
+    }
+  }
+
+  if (orderedImages.length === 0) {
+    orderedImages.push(thumbnail || "/images/categories/silk-sarees.jpg");
   }
 
   // Stock & Availability
@@ -119,7 +149,8 @@ export function mapDocToProduct(id: string, data: Record<string, any>): NekaraPr
     formattedOriginalPrice: originalPrice ? formatINR(originalPrice) : undefined,
     discountPercentage,
     image: thumbnail,
-    images,
+    images: orderedImages,
+    designImage,
     category: categoryName,
     categoryId: data.categoryId || "",
     categoryName,

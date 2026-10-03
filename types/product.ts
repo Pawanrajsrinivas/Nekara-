@@ -18,6 +18,7 @@ export interface NekaraProduct {
   discountPercentage?: number;
   image: string;
   images: string[];
+  designImage?: string;
   category: string;
   categoryId: string;
   categoryName: string;

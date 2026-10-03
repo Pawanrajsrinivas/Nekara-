@@ -83,34 +83,90 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onSnapshot(
       cartItemsRef,
       async (snapshot) => {
-        const cartList: CartItem[] = [];
+        if (snapshot.empty) {
+          setItems([]);
+          setLoading(false);
+          return;
+        }
 
-        for (const docSnap of snapshot.docs) {
-          const data = docSnap.data();
-          const productId = data.productId || docSnap.id;
+        // Reconcile each item against live /products/{productId} in Firestore
+        const staleDocIdsToDelete: string[] = [];
+        const validCartList: CartItem[] = [];
 
-          // Snapshot values saved when added
-          const name = data.nameSnapshot || data.name || "Handcrafted Saree";
+        const productChecks = await Promise.all(
+          snapshot.docs.map(async (docSnap) => {
+            const data = docSnap.data();
+            const productId = data.productId || docSnap.id;
+            try {
+              const prodDocRef = doc(db, "products", productId);
+              const prodSnap = await getDoc(prodDocRef);
+              return {
+                docSnap,
+                productId,
+                data,
+                exists: prodSnap.exists(),
+                prodData: prodSnap.exists() ? prodSnap.data() : null,
+              };
+            } catch (err) {
+              console.warn(
+                `[NEKARA CART] Error verifying product ${productId} existence:`,
+                err
+              );
+              // On transient network error, preserve item to prevent accidental deletion
+              return { docSnap, productId, data, exists: true, prodData: null };
+            }
+          })
+        );
+
+        for (const check of productChecks) {
+          if (!check.exists) {
+            // Product no longer exists in Firestore products collection! Mark for deletion
+            staleDocIdsToDelete.push(check.docSnap.id);
+            console.log(
+              `[NEKARA CART] Product ${check.productId} no longer exists in catalog. Removing stale item ${check.docSnap.id} from cart.`
+            );
+            continue;
+          }
+
+          // Product exists in catalog! Use current live product document where available
+          const prodData = check.prodData;
+          const data = check.data;
+
+          const name = prodData?.name || data.nameSnapshot || data.name || "Handcrafted Saree";
           const price =
-            typeof data.priceSnapshot === "number"
+            typeof prodData?.price === "number"
+              ? prodData.price
+              : typeof data.priceSnapshot === "number"
               ? data.priceSnapshot
               : typeof data.price === "number"
               ? data.price
               : parseFloat(data.price) || 0;
           const originalPrice =
-            data.originalPriceSnapshot || data.originalPrice
+            prodData?.originalPrice !== undefined
+              ? Number(prodData.originalPrice)
+              : data.originalPriceSnapshot || data.originalPrice
               ? Number(data.originalPriceSnapshot || data.originalPrice)
               : undefined;
           const image =
-            data.imageSnapshot || data.image || "/images/categories/silk-sarees.jpg";
+            prodData?.thumbnail ||
+            (Array.isArray(prodData?.images) && prodData.images[0]) ||
+            data.imageSnapshot ||
+            data.image ||
+            "/images/categories/silk-sarees.jpg";
           const quantity = typeof data.quantity === "number" ? data.quantity : 1;
+          const stock =
+            typeof prodData?.stock === "number"
+              ? prodData.stock
+              : typeof data.stock === "number"
+              ? data.stock
+              : 10;
 
-          cartList.push({
-            id: docSnap.id,
-            productId,
+          validCartList.push({
+            id: check.docSnap.id,
+            productId: check.productId,
             name,
             nameSnapshot: data.nameSnapshot || name,
-            slug: data.slug || productId,
+            slug: prodData?.slug || data.slug || check.productId,
             price,
             priceSnapshot: price,
             originalPrice,
@@ -118,10 +174,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             image,
             imageSnapshot: image,
             quantity,
-            stock: typeof data.stock === "number" ? data.stock : 10,
-            fabric: data.fabric || "",
-            color: data.color || "",
-            categoryName: data.categoryName || "",
+            stock,
+            fabric: prodData?.fabric || data.fabric || "",
+            color: prodData?.color || data.color || "",
+            categoryName:
+              prodData?.categoryName ||
+              prodData?.category ||
+              data.categoryName ||
+              "",
             addedAt: data.addedAt?.toDate
               ? data.addedAt.toDate().toISOString()
               : undefined,
@@ -134,8 +194,37 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           });
         }
 
-        setItems(cartList);
+        // Set local state immediately with valid items
+        setItems(validCartList);
         setLoading(false);
+
+        // Delete stale items from persistent Firestore cart
+        if (staleDocIdsToDelete.length > 0) {
+          try {
+            await Promise.all(
+              staleDocIdsToDelete.map((docId) =>
+                deleteDoc(doc(db, "carts", user.uid, "items", docId))
+              )
+            );
+            const cartDocRef = doc(db, "carts", user.uid);
+            await setDoc(
+              cartDocRef,
+              {
+                userId: user.uid,
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            );
+            console.log(
+              `[NEKARA CART] Successfully cleaned ${staleDocIdsToDelete.length} stale items from Firestore.`
+            );
+          } catch (cleanErr) {
+            console.warn(
+              "[NEKARA CART] Error deleting stale cart items from Firestore:",
+              cleanErr
+            );
+          }
+        }
       },
       (error) => {
         console.error(
@@ -160,17 +249,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, user, logDiagnostic]);
 
   /**
-   * Re-verify current live stock from /products/{productId} for all items in the cart
+   * Re-verify current live stock & product existence from /products/{productId} for all items in the cart.
+   * If a product was deleted from the catalog, removes it from both Firestore and local state.
    */
   const refreshLiveStock = useCallback(async () => {
     if (!isAuthenticated || !user || !db || items.length === 0) return;
 
     try {
+      const staleItemsToDelete: string[] = [];
       const updatedStockMap = new Map<string, number>();
 
       for (const item of items) {
         const prodDoc = await getDoc(doc(db, "products", item.productId));
-        if (prodDoc.exists()) {
+        if (!prodDoc.exists()) {
+          // Product was deleted from catalog by admin!
+          staleItemsToDelete.push(item.id);
+          console.log(
+            `[NEKARA CART] refreshLiveStock: Product ${item.productId} was deleted from catalog. Marking stale cart item ${item.id} for deletion.`
+          );
+        } else {
           const prodData = prodDoc.data();
           const liveStock =
             typeof prodData.stock === "number"
@@ -180,19 +277,77 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      setItems((prevItems) =>
-        prevItems.map((item) => {
-          if (updatedStockMap.has(item.productId)) {
-            const liveStock = updatedStockMap.get(item.productId)!;
-            return { ...item, stock: liveStock };
-          }
-          return item;
-        })
-      );
+      if (staleItemsToDelete.length > 0) {
+        // Immediately remove stale items from local state so UI updates without waiting
+        const staleSet = new Set(staleItemsToDelete);
+        setItems((prevItems) => prevItems.filter((i) => !staleSet.has(i.id)));
+
+        // Remove stale items from persistent Firestore cart
+        await Promise.all(
+          staleItemsToDelete.map((docId) =>
+            deleteDoc(doc(db, "carts", user.uid, "items", docId))
+          )
+        );
+
+        const cartDocRef = doc(db, "carts", user.uid);
+        await setDoc(
+          cartDocRef,
+          {
+            userId: user.uid,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } else {
+        setItems((prevItems) =>
+          prevItems.map((item) => {
+            if (updatedStockMap.has(item.productId)) {
+              const liveStock = updatedStockMap.get(item.productId)!;
+              return { ...item, stock: liveStock };
+            }
+            return item;
+          })
+        );
+      }
     } catch (err) {
-      console.warn("[NEKARA Cart] Could not refresh live product stock:", err);
+      console.warn(
+        "[NEKARA Cart] Could not refresh live product stock / reconcile:",
+        err
+      );
     }
   }, [isAuthenticated, user, items]);
+
+  // Reconcile and refresh live stock when tab gains focus or becomes visible
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+
+    const handleFocusOrVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshLiveStock();
+      }
+    };
+
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+    return () => {
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
+  }, [isAuthenticated, user, refreshLiveStock]);
+
+  // Periodic reconciliation while user is actively on site with items in cart
+  useEffect(() => {
+    if (!isAuthenticated || !user || items.length === 0) return;
+
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        refreshLiveStock();
+      }
+    }, 15000); // 15 seconds
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated, user, items.length, refreshLiveStock]);
 
   // Compute total item count (sum of all quantities: Saree A x 1 + Saree B x 2 = 3)
   const totalItems = items.reduce((sum, item) => sum + (item.quantity || 1), 0);
