@@ -58,7 +58,34 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
     return list.length > 0 ? list : [product.image || "/images/categories/silk-sarees.jpg"];
   }, [product.image, product.designImage, product.images]);
 
+  // Design Image Detection & Permanent Rule Support
+  const normalizedDesignImg = (
+    typeof product.designImage === "string"
+      ? product.designImage
+      : (product.designImage as unknown as { url?: string })?.url || ""
+  ).trim();
+
+  // URL matcher that ignores http vs https protocols, query variations, and trailing slashes
+  const isMatchingUrl = (urlA?: string, urlB?: string) => {
+    if (!urlA || !urlB) return false;
+    const cleanA = urlA.trim().replace(/^https?:\/\//i, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+    const cleanB = urlB.trim().replace(/^https?:\/\//i, "").replace(/[?#].*$/, "").replace(/\/+$/, "");
+    return cleanA.length > 0 && cleanA === cleanB;
+  };
+
+  const hasDesignImage = Boolean(
+    normalizedDesignImg &&
+    images.length > 1 &&
+    (images.some((img) => isMatchingUrl(img, normalizedDesignImg)) || images.length > 1)
+  );
+
+  const isDesignImageAt = (index: number) => {
+    if (!hasDesignImage || index < 0 || index >= images.length) return false;
+    return isMatchingUrl(images[index], normalizedDesignImg) || (index === 1 && hasDesignImage);
+  };
+
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const isDesignImageSelected = isDesignImageAt(selectedImageIndex);
   const thumbnailContainerRef = React.useRef<HTMLDivElement>(null);
   const touchStartX = React.useRef<number | null>(null);
   const touchStartY = React.useRef<number | null>(null);
@@ -194,6 +221,7 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
               >
                 {images.map((imgUrl, index) => {
                   const isSelected = index === selectedImageIndex;
+                  const isDesignThumb = isDesignImageAt(index);
                   return (
                     <button
                       key={imgUrl + index}
@@ -205,7 +233,7 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                           ? "border-[#075E5A] shadow-md scale-102"
                           : "border-[#B58A45]/20 hover:border-[#B58A45]/60 opacity-80 hover:opacity-100"
                       )}
-                      aria-label={`View image thumbnail ${index + 1}`}
+                      aria-label={`View image thumbnail ${index + 1}${isDesignThumb ? " (Design)" : ""}`}
                     >
                       <Image
                         src={imgUrl}
@@ -214,6 +242,11 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                         sizes="80px"
                         className="object-cover"
                       />
+                      {isDesignThumb && (
+                        <span className="absolute inset-x-0 bottom-0 z-10 py-0.5 px-1 bg-[#02221D]/85 backdrop-blur-xs text-[#F4EEDB] text-[8px] sm:text-[9px] font-sans font-semibold tracking-[0.16em] uppercase text-center border-t border-[#B58A45]/40 leading-none pointer-events-none">
+                          DESIGN
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -261,14 +294,20 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                 </>
               )}
 
-              {/* Badge */}
-              {product.badge && (
-                <div className="absolute top-4 left-4 z-10">
+              {/* Badges / Overlays (Product Badge & Subtle Design Indicator) */}
+              <div className="absolute top-4 left-4 z-20 flex flex-wrap items-center gap-2 pointer-events-none">
+                {product.badge && (
                   <span className="inline-block px-3 py-1 bg-[#FAF5ED]/95 backdrop-blur-xs text-[#075E5A] border border-[#B58A45]/30 text-[10px] font-sans font-bold tracking-[0.2em] uppercase rounded-xs shadow-sm">
                     {product.badge}
                   </span>
-                </div>
-              )}
+                )}
+                {isDesignImageSelected && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FAF5ED]/95 backdrop-blur-xs text-[#02221D] border border-[#B58A45]/40 text-[10px] font-sans font-bold tracking-[0.2em] uppercase rounded-xs shadow-sm">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#B58A45]" />
+                    DESIGN
+                  </span>
+                )}
+              </div>
 
               {/* Discount Tag */}
               {product.discountPercentage && (
