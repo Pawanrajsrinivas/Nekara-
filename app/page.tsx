@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { HeroSlider } from "@/components/home/HeroSlider";
 import { TrustFeatures } from "@/components/home/TrustFeatures";
 import { CategorySection } from "@/components/home/CategorySection";
@@ -16,7 +16,6 @@ import { HomeSection, NekaraProduct, NekaraCategory } from "@/types/product";
 import { getProducts, getCategories } from "@/lib/products";
 import {
   getHomeSections,
-  resolveSectionProducts,
   DEFAULT_STOREFRONT_SECTIONS,
 } from "@/lib/storefront";
 
@@ -42,7 +41,6 @@ export default function HomePage() {
         setProducts(allActiveProducts);
         setCategories(categoriesData || []);
 
-        // If Firestore homeSections has documents, use them; otherwise use default fallback
         if (sectionsData && sectionsData.length > 0) {
           setSections(sectionsData);
         } else {
@@ -59,21 +57,75 @@ export default function HomePage() {
     loadHomepageMerchandising();
   }, []);
 
-  // Filter enabled sections and sort by displayOrder
-  const enabledSections = (sections.length > 0 ? sections : DEFAULT_STOREFRONT_SECTIONS)
-    .filter((s) => s.enabled !== false)
-    .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  // Filter hero section and optional shopByStyle section
+  const heroSection = sections.find((s) => s.id === "hero") || DEFAULT_STOREFRONT_SECTIONS[0];
+  const shopByStyleSection = sections.find((s) => s.id === "shopByStyle");
 
-  // Find hero and shopByStyle configuration if present
-  const heroSection = enabledSections.find((s) => s.id === "hero");
-  const otherSections = enabledSections.filter((s) => s.id !== "hero");
+  // The 3 Core Homepage Sections in exact requested order:
+  // 1. New Arrivals: active == true && newArrival == true
+  // 2. Trending Sarees: active == true && featured == true
+  // 3. Bestsellers: active == true && bestseller == true
+  const homepageProductSections = useMemo(() => {
+    const activeProducts = products.filter((p) => p.active !== false);
+
+    const newArrivalsList = activeProducts.filter((p) => p.newArrival === true);
+    const trendingList = activeProducts.filter((p) => p.featured === true);
+    const bestsellersList = activeProducts.filter((p) => p.bestseller === true);
+
+    const list: {
+      section: HomeSection;
+      products: NekaraProduct[];
+    }[] = [
+      {
+        section: {
+          id: "newArrivals",
+          title: "New Arrivals",
+          subtitle: "Fresh additions directly from our master artisan looms",
+          enabled: true,
+          mode: "automatic",
+          productIds: [],
+          displayOrder: 1,
+          limit: 8,
+        },
+        products: newArrivalsList,
+      },
+      {
+        section: {
+          id: "trending",
+          title: "Trending Sarees",
+          subtitle: "Discover the sarees everyone is loving",
+          enabled: true,
+          mode: "automatic",
+          productIds: [],
+          displayOrder: 2,
+          limit: 8,
+        },
+        products: trendingList,
+      },
+      {
+        section: {
+          id: "bestsellers",
+          title: "Bestsellers",
+          subtitle: "Our most cherished and celebrated heirloom weaves",
+          enabled: true,
+          mode: "automatic",
+          productIds: [],
+          displayOrder: 3,
+          limit: 8,
+        },
+        products: bestsellersList,
+      },
+    ];
+
+    return list;
+  }, [products]);
 
   return (
     <div className="w-full">
       {/* 1. Hero Experience */}
       {heroSection && (
         <HeroSlider
-          enabled={heroSection.enabled}
+          enabled={heroSection.enabled !== false}
           title={heroSection.title}
           subtitle={heroSection.subtitle}
         />
@@ -85,7 +137,16 @@ export default function HomePage() {
       {/* 3. Explore by Category (Strictly dynamic from Firestore) */}
       <CategorySection categories={categories} />
 
-      {/* 4. Loading State Skeletons */}
+      {/* 4. Optional Shop By Style if configured and has categories */}
+      {shopByStyleSection && shopByStyleSection.enabled && (
+        <ShopByStyle
+          title={shopByStyleSection.title}
+          subtitle={shopByStyleSection.subtitle}
+          categoryIds={shopByStyleSection.categoryIds}
+        />
+      )}
+
+      {/* 5. Loading State Skeletons */}
       {loading ? (
         <section className="relative w-full bg-[#FAF6F0] py-10 sm:py-16 overflow-hidden border-t border-[#B58A45]/20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -98,22 +159,8 @@ export default function HomePage() {
           </div>
         </section>
       ) : (
-        /* 5. Dynamic Homepage Sections (Featured, New Arrivals, Bestsellers) */
-        otherSections.map((section) => {
-          if (section.id === "shopByStyle") {
-            return (
-              <ShopByStyle
-                key="shopByStyle"
-                title={section.title}
-                subtitle={section.subtitle}
-                categoryIds={section.categoryIds}
-              />
-            );
-          }
-
-          // Product-based sections (Featured, New Arrivals, Bestsellers, Offers)
-          const sectionProducts = resolveSectionProducts(section, products);
-
+        /* 6. The 3 Core Homepage Sections (New Arrivals, Trending Sarees, Bestsellers) */
+        homepageProductSections.map(({ section, products: sectionProducts }) => {
           // Gracefully hide sections that have 0 products matching the criteria
           if (sectionProducts.length === 0) {
             return null;
@@ -129,19 +176,19 @@ export default function HomePage() {
         })
       )}
 
-      {/* 6. Brand Story & Heritage Lineage */}
+      {/* 7. Brand Story & Heritage Lineage */}
       <BrandStory />
 
-      {/* 7. The Art of the Weave / Craftsmanship */}
+      {/* 8. The Art of the Weave / Craftsmanship */}
       <CraftsmanshipSection />
 
-      {/* 8. Collection Call-to-Action */}
+      {/* 9. Collection Call-to-Action */}
       <CollectionCta />
 
-      {/* 9. From the NEKARA Journal */}
+      {/* 10. From the NEKARA Journal */}
       <JournalSection />
 
-      {/* 10. Privileged Access / Newsletter */}
+      {/* 11. Privileged Access / Newsletter */}
       <NewsletterSection />
     </div>
   );

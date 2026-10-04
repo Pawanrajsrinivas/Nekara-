@@ -27,14 +27,35 @@ export function DynamicProductSection({
   const getSectionTag = () => {
     switch (section.id) {
       case "trending":
-        return "MOST LOVED DRAPES";
+      case "featured":
+        return "MOST LOVED DRAPES • TRENDING";
       case "newArrivals":
         return "JUST IN • FRESH WEAVES";
+      case "bestsellers":
+      case "bestSellers":
+      case "bestseller":
+        return "TIMELESS FAVORITES • BESTSELLERS";
       case "offers":
         return "LIMITED EDITION • VALUE OFFERS";
       case "signature":
       default:
         return "HANDLOOM SPLENDOR";
+    }
+  };
+
+  const getSectionTitle = () => {
+    switch (section.id) {
+      case "trending":
+      case "featured":
+        return "Trending Sarees";
+      case "newArrivals":
+        return "New Arrivals";
+      case "bestsellers":
+      case "bestSellers":
+      case "bestseller":
+        return "Bestsellers";
+      default:
+        return section.title || "Curated Sarees";
     }
   };
 
@@ -69,7 +90,7 @@ export function DynamicProductSection({
               </span>
             </div>
             <h2 className="font-serif text-xl sm:text-3xl lg:text-[34px] font-normal tracking-wide text-[#241A15]">
-              {section.title}
+              {getSectionTitle()}
             </h2>
             {section.subtitle && (
               <p className="text-xs sm:text-sm text-[#3A2115]/75 mt-1 font-sans">

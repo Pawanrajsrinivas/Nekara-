@@ -4,13 +4,14 @@ import { HomeSection, NekaraProduct } from "@/types/product";
 
 export const ESSENTIAL_SECTION_IDS = new Set([
   "hero",
-  "featured",
+  "newArrivals",
   "trending",
+  "featured",
+  "bestsellers",
+  "bestSellers",
+  "bestseller",
   "shopByStyle",
   "signature",
-  "newArrivals",
-  "bestsellers",
-  "bestseller",
   "offers",
 ]);
 
@@ -26,9 +27,9 @@ export const DEFAULT_STOREFRONT_SECTIONS: HomeSection[] = [
     limit: 3,
   },
   {
-    id: "featured",
-    title: "Featured Sarees",
-    subtitle: "Handpicked mastercrafted sarees representing our finest handloom weaves",
+    id: "newArrivals",
+    title: "New Arrivals",
+    subtitle: "Fresh additions directly from our master artisan looms",
     enabled: true,
     mode: "automatic",
     productIds: [],
@@ -36,9 +37,9 @@ export const DEFAULT_STOREFRONT_SECTIONS: HomeSection[] = [
     limit: 8,
   },
   {
-    id: "newArrivals",
-    title: "New Arrivals",
-    subtitle: "Fresh additions directly from our master artisan looms",
+    id: "trending",
+    title: "Trending Sarees",
+    subtitle: "Discover the sarees everyone is loving",
     enabled: true,
     mode: "automatic",
     productIds: [],
@@ -47,7 +48,7 @@ export const DEFAULT_STOREFRONT_SECTIONS: HomeSection[] = [
   },
   {
     id: "bestsellers",
-    title: "Bestselling Sarees",
+    title: "Bestsellers",
     subtitle: "Our most cherished and celebrated heirloom weaves",
     enabled: true,
     mode: "automatic",
@@ -89,12 +90,12 @@ export async function getHomeSections(): Promise<HomeSection[]> {
 }
 
 /**
- * Resolves active products for a homepage section based on Admin product flags:
- * - Featured: active == true && featured == true
+ * Resolves active products for a homepage section strictly based on Admin selection flags:
  * - New Arrivals: active == true && newArrival == true
+ * - Trending Sarees: active == true && featured == true
  * - Bestsellers: active == true && bestseller == true
  * - Stock = 0: Active products with 0 stock stay visible and display "SOLD OUT"
- * - Gracefully hides empty sections without falling back to fake/dummy products.
+ * - Gracefully returns empty array when no products are selected (hides section).
  */
 export function resolveSectionProducts(
   section: HomeSection,
@@ -104,7 +105,7 @@ export function resolveSectionProducts(
   const activeProducts = allProducts.filter((p) => p.active !== false);
   const limit = section.limit || 8;
 
-  // 1. Manual Mode: If specific product IDs are explicitly configured in the section
+  // If specific manual product IDs are provided and populated
   if (section.mode === "manual" && Array.isArray(section.productIds) && section.productIds.length > 0) {
     const productsMap = new Map<string, NekaraProduct>();
     for (const p of activeProducts) {
@@ -121,7 +122,7 @@ export function resolveSectionProducts(
     return resolved.slice(0, limit);
   }
 
-  // 2. Automatic Mode strictly driven by Firestore product attributes
+  // Automatic Mode matching Admin selection flags:
   switch (section.id) {
     case "newArrivals": {
       // Products where active === true && newArrival === true
@@ -130,6 +131,7 @@ export function resolveSectionProducts(
     }
 
     case "bestsellers":
+    case "bestSellers":
     case "bestseller": {
       // Products where active === true && bestseller === true
       const matches = activeProducts.filter((p) => p.bestseller === true);
@@ -144,8 +146,8 @@ export function resolveSectionProducts(
       return onSale.slice(0, limit);
     }
 
-    case "featured":
     case "trending":
+    case "featured":
     case "signature":
     default: {
       // Products where active === true && featured === true
