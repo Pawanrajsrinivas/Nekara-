@@ -1,10 +1,52 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { CATEGORIES_DATA } from "@/data/categories";
 import { CategoryCard } from "@/components/home/CategoryCard";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
+import type { NekaraCategory } from "@/types/product";
+import { getCategories } from "@/lib/products";
 
-export function CategorySection() {
+interface CategorySectionProps {
+  categories?: NekaraCategory[];
+}
+
+export function CategorySection({ categories: initialCategories }: CategorySectionProps) {
+  const [categories, setCategories] = useState<NekaraCategory[]>(initialCategories || []);
+  const [loading, setLoading] = useState(!initialCategories);
+
+  useEffect(() => {
+    if (initialCategories && initialCategories.length > 0) {
+      setCategories(initialCategories);
+      setLoading(false);
+      return;
+    }
+
+    async function load() {
+      try {
+        setLoading(true);
+        const cats = await getCategories();
+        setCategories(cats || []);
+      } catch (err) {
+        console.error("Error loading categories for homepage:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [initialCategories]);
+
+  // If loading and no categories yet, hide to prevent flash
+  if (loading && categories.length === 0) {
+    return null;
+  }
+
+  // Never render dummy data. If no real categories exist in Firestore, hide the section gracefully
+  if (categories.length === 0) {
+    return null;
+  }
+
   return (
     <section
       aria-label="Explore Sarees by Category"
@@ -21,12 +63,7 @@ export function CategorySection() {
       />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* =========================================================
-            SECTION HEADER
-            Left: "Explore by Category"
-            Center: Decorative line with Indian ornament medallion (desktop/tablet)
-            Right: "View All →"
-           ========================================================= */}
+        {/* Section Header */}
         <div className="flex items-center justify-between gap-3 sm:gap-6 lg:gap-8 mb-8 sm:mb-12">
           {/* Section Heading */}
           <h2 className="font-serif text-xl sm:text-3xl lg:text-[34px] font-normal tracking-wide text-[#241A15] shrink-0">
@@ -57,25 +94,21 @@ export function CategorySection() {
           </Link>
         </div>
 
-        {/* =========================================================
-            CATEGORY CARDS
-            Desktop: Exactly 6 circular cards in 1 row
-            Mobile: Dedicated, clean 3-column responsive grid (2 rows of 3)
-           ========================================================= */}
-        {/* Desktop 6-column Grid */}
-        <div className="hidden md:grid md:grid-cols-6 gap-4 lg:gap-5 justify-items-center">
-          {CATEGORIES_DATA.map((category, idx) => (
-            <div key={`desktop-cat-${category.id}`} className="w-full flex justify-center">
-              <CategoryCard category={category} priority={idx < 3} />
-            </div>
-          ))}
-        </div>
-
-        {/* Mobile 3-column Grid (Perfect for 320px–430px viewports) */}
-        <div className="grid md:hidden grid-cols-3 gap-y-4 gap-x-1.5 sm:gap-x-3 justify-items-center">
-          {CATEGORIES_DATA.map((category, idx) => (
-            <div key={`mobile-cat-${category.id}`} className="w-full flex justify-center">
-              <CategoryCard category={category} priority={idx < 3} />
+        {/* Dynamic Category Cards Grid (Centered and Balanced) */}
+        <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8 lg:gap-10">
+          {categories.map((category, idx) => (
+            <div key={`cat-${category.id}`} className="flex justify-center">
+              <CategoryCard
+                category={{
+                  id: category.id,
+                  name: category.name,
+                  slug: category.slug,
+                  image: category.image,
+                  href: `/shop?category=${encodeURIComponent(category.name)}`,
+                  alt: `${category.name} Sarees`,
+                }}
+                priority={idx < 4}
+              />
             </div>
           ))}
         </div>

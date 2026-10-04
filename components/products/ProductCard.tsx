@@ -54,14 +54,20 @@ export function ProductCard({ product, priority = false, className }: ProductCar
             onError={() => setImgError(true)}
           />
 
-          {/* Optional Badge */}
-          {product.badge && (
+          {/* Sold Out or Status Badge */}
+          {product.stock <= 0 ? (
+            <div className="absolute top-2.5 left-2.5 z-10">
+              <span className="inline-block px-2.5 py-0.5 bg-[#8C2525] text-white text-[9px] font-sans font-bold tracking-[0.16em] uppercase rounded-xs shadow-sm">
+                SOLD OUT
+              </span>
+            </div>
+          ) : product.badge ? (
             <div className="absolute top-2.5 left-2.5 z-10">
               <span className="inline-block px-2 py-0.5 bg-[#FAF5ED]/95 backdrop-blur-xs text-[#075E5A] border border-[#B58A45]/30 text-[9px] font-sans font-bold tracking-[0.16em] uppercase rounded-xs shadow-xs">
                 {product.badge}
               </span>
             </div>
-          )}
+          ) : null}
 
           {/* Heart / Wishlist Button (min 44px tap area for accessibility) */}
           <div className="absolute top-1.5 right-1.5 z-20">

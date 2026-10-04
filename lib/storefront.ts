@@ -4,10 +4,13 @@ import { HomeSection, NekaraProduct } from "@/types/product";
 
 export const ESSENTIAL_SECTION_IDS = new Set([
   "hero",
+  "featured",
   "trending",
   "shopByStyle",
   "signature",
   "newArrivals",
+  "bestsellers",
+  "bestseller",
   "offers",
 ]);
 
@@ -23,62 +26,40 @@ export const DEFAULT_STOREFRONT_SECTIONS: HomeSection[] = [
     limit: 3,
   },
   {
-    id: "trending",
-    title: "Trending Sarees",
-    subtitle: "Discover the sarees everyone is loving",
+    id: "featured",
+    title: "Featured Sarees",
+    subtitle: "Handpicked mastercrafted sarees representing our finest handloom weaves",
     enabled: true,
-    mode: "manual",
+    mode: "automatic",
     productIds: [],
     displayOrder: 2,
-    limit: 6,
-  },
-  {
-    id: "shopByStyle",
-    title: "Shop by Style",
-    subtitle: "Curated collections of timeless Indian handlooms",
-    enabled: true,
-    mode: "manual",
-    productIds: [],
-    categoryIds: [],
-    displayOrder: 3,
-    limit: 5,
-  },
-  {
-    id: "signature",
-    title: "Our Signature Sarees",
-    subtitle: "Mastercrafted creations embodying royal Indian tradition",
-    enabled: true,
-    mode: "manual",
-    productIds: [],
-    displayOrder: 4,
-    limit: 6,
+    limit: 8,
   },
   {
     id: "newArrivals",
     title: "New Arrivals",
-    subtitle: "Fresh additions to the NEKARA collection",
+    subtitle: "Fresh additions directly from our master artisan looms",
     enabled: true,
     mode: "automatic",
     productIds: [],
-    displayOrder: 5,
-    limit: 6,
+    displayOrder: 3,
+    limit: 8,
   },
   {
-    id: "offers",
-    title: "Special Offers & Limited Editions",
-    subtitle: "Exquisite drapes at exceptional values",
+    id: "bestsellers",
+    title: "Bestselling Sarees",
+    subtitle: "Our most cherished and celebrated heirloom weaves",
     enabled: true,
     mode: "automatic",
     productIds: [],
-    displayOrder: 6,
-    limit: 6,
+    displayOrder: 4,
+    limit: 8,
   },
 ];
 
 /**
- * Fetches all homepage sections from Firestore `homeSections` collection.
+ * Fetches homepage sections from Firestore `homeSections` collection.
  * Gracefully returns empty array on failure or when uninitialized.
- * Filters strictly to the 6 essential sections.
  */
 export async function getHomeSections(): Promise<HomeSection[]> {
   if (!db || typeof db.type !== "string") {
@@ -93,7 +74,6 @@ export async function getHomeSections(): Promise<HomeSection[]> {
 
     const sections: HomeSection[] = [];
     snap.forEach((d) => {
-      // Strictly ignore deprecated sections
       if (ESSENTIAL_SECTION_IDS.has(d.id)) {
         const data = d.data() as Omit<HomeSection, "id">;
         sections.push({ id: d.id, ...data });
@@ -109,22 +89,23 @@ export async function getHomeSections(): Promise<HomeSection[]> {
 }
 
 /**
- * Resolves active products for a homepage section based on mode (manual vs automatic)
- * and limits the output strictly to `section.limit`.
+ * Resolves active products for a homepage section based on Admin product flags:
+ * - Featured: active == true && featured == true
+ * - New Arrivals: active == true && newArrival == true
+ * - Bestsellers: active == true && bestseller == true
+ * - Stock = 0: Active products with 0 stock stay visible and display "SOLD OUT"
+ * - Gracefully hides empty sections without falling back to fake/dummy products.
  */
 export function resolveSectionProducts(
   section: HomeSection,
   allProducts: NekaraProduct[]
 ): NekaraProduct[] {
+  // Keep all active products (even if stock is 0, they display "SOLD OUT")
   const activeProducts = allProducts.filter((p) => p.active !== false);
-  const limit = section.limit || 6;
+  const limit = section.limit || 8;
 
-  // 1. Manual Mode: Preserve the exact configured product order
-  if (section.mode === "manual") {
-    if (!Array.isArray(section.productIds) || section.productIds.length === 0) {
-      return [];
-    }
-
+  // 1. Manual Mode: If specific product IDs are explicitly configured in the section
+  if (section.mode === "manual" && Array.isArray(section.productIds) && section.productIds.length > 0) {
     const productsMap = new Map<string, NekaraProduct>();
     for (const p of activeProducts) {
       productsMap.set(p.id, p);
@@ -137,45 +118,39 @@ export function resolveSectionProducts(
         resolved.push(p);
       }
     }
-
     return resolved.slice(0, limit);
   }
 
-  // 2. Automatic Mode: Curate based on real Firestore product attributes
+  // 2. Automatic Mode strictly driven by Firestore product attributes
   switch (section.id) {
     case "newArrivals": {
-      // Sort by newest created date or newArrival flag
-      const sorted = [...activeProducts].sort((a, b) => {
-        if (a.newArrival && !b.newArrival) return -1;
-        if (!a.newArrival && b.newArrival) return 1;
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return timeB - timeA;
-      });
-      return sorted.slice(0, limit);
+      // Products where active === true && newArrival === true
+      const matches = activeProducts.filter((p) => p.newArrival === true);
+      return matches.slice(0, limit);
+    }
+
+    case "bestsellers":
+    case "bestseller": {
+      // Products where active === true && bestseller === true
+      const matches = activeProducts.filter((p) => p.bestseller === true);
+      return matches.slice(0, limit);
     }
 
     case "offers": {
-      // Products with a real discounted sale price lower than regular price
+      // Products with active === true and real discounted salePrice
       const onSale = activeProducts.filter(
         (p) => typeof p.salePrice === "number" && p.salePrice > 0 && p.salePrice < p.price
       );
-      if (onSale.length > 0) {
-        return onSale.slice(0, limit);
-      }
-      return [];
+      return onSale.slice(0, limit);
     }
 
+    case "featured":
     case "trending":
     case "signature":
     default: {
-      // Featured or high rated products fallback
-      const featured = activeProducts.filter((p) => p.featured);
-      if (featured.length >= limit) {
-        return featured.slice(0, limit);
-      }
-      const others = activeProducts.filter((p) => !p.featured);
-      return [...featured, ...others].slice(0, limit);
+      // Products where active === true && featured === true
+      const matches = activeProducts.filter((p) => p.featured === true);
+      return matches.slice(0, limit);
     }
   }
 }

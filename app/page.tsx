@@ -12,8 +12,8 @@ import { CollectionCta } from "@/components/home/CollectionCta";
 import { JournalSection } from "@/components/home/JournalSection";
 import { NewsletterSection } from "@/components/home/NewsletterSection";
 import { ProductSkeleton } from "@/components/products/ProductSkeleton";
-import { HomeSection, NekaraProduct } from "@/types/product";
-import { getProducts } from "@/lib/products";
+import { HomeSection, NekaraProduct, NekaraCategory } from "@/types/product";
+import { getProducts, getCategories } from "@/lib/products";
 import {
   getHomeSections,
   resolveSectionProducts,
@@ -23,6 +23,7 @@ import {
 export default function HomePage() {
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [products, setProducts] = useState<NekaraProduct[]>([]);
+  const [categories, setCategories] = useState<NekaraCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,14 +31,16 @@ export default function HomePage() {
       try {
         setLoading(true);
 
-        // Fetch homeSections and products concurrently
-        const [sectionsData, productsResult] = await Promise.all([
+        // Fetch homeSections, products, and categories concurrently
+        const [sectionsData, productsResult, categoriesData] = await Promise.all([
           getHomeSections(),
           getProducts({ limit: 100 }),
+          getCategories(),
         ]);
 
         const allActiveProducts = productsResult.products || [];
         setProducts(allActiveProducts);
+        setCategories(categoriesData || []);
 
         // If Firestore homeSections has documents, use them; otherwise use default fallback
         if (sectionsData && sectionsData.length > 0) {
@@ -67,7 +70,7 @@ export default function HomePage() {
 
   return (
     <div className="w-full">
-      {/* 1. Hero Experience (Dynamic if configured) */}
+      {/* 1. Hero Experience */}
       {heroSection && (
         <HeroSlider
           enabled={heroSection.enabled}
@@ -79,8 +82,8 @@ export default function HomePage() {
       {/* 2. Premium Trust / Brand Values Strip */}
       <TrustFeatures />
 
-      {/* 3. Explore by Category */}
-      <CategorySection />
+      {/* 3. Explore by Category (Strictly dynamic from Firestore) */}
+      <CategorySection categories={categories} />
 
       {/* 4. Loading State Skeletons */}
       {loading ? (
@@ -95,7 +98,7 @@ export default function HomePage() {
           </div>
         </section>
       ) : (
-        /* 5. Dynamic Homepage Sections Ordered by Admin Display Order */
+        /* 5. Dynamic Homepage Sections (Featured, New Arrivals, Bestsellers) */
         otherSections.map((section) => {
           if (section.id === "shopByStyle") {
             return (
@@ -108,8 +111,13 @@ export default function HomePage() {
             );
           }
 
-          // Product-based sections (Trending, Signature, New Arrivals, Best Sellers, Offers, Editorial)
+          // Product-based sections (Featured, New Arrivals, Bestsellers, Offers)
           const sectionProducts = resolveSectionProducts(section, products);
+
+          // Gracefully hide sections that have 0 products matching the criteria
+          if (sectionProducts.length === 0) {
+            return null;
+          }
 
           return (
             <DynamicProductSection

@@ -46,6 +46,7 @@ export interface NekaraCategory {
   name: string;
   slug: string;
   description?: string;
+  image?: string;
   active?: boolean;
 }
 

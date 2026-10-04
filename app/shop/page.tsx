@@ -13,12 +13,6 @@ import { cn } from "@/lib/utils";
 
 const DEFAULT_CATEGORIES: { label: string; value: string }[] = [
   { label: "All Sarees", value: "All" },
-  { label: "Silk Sarees", value: "Silk Sarees" },
-  { label: "Banarasi Sarees", value: "Banarasi Sarees" },
-  { label: "Kanchipuram Sarees", value: "Kanchipuram Sarees" },
-  { label: "Cotton Sarees", value: "Cotton Sarees" },
-  { label: "Party Wear", value: "Party Wear" },
-  { label: "Designer Sarees", value: "Designer Sarees" },
 ];
 
 const SORT_OPTIONS = [
@@ -37,12 +31,7 @@ function ShopInner() {
   // Normalize initial category from URL
   const getInitialCategory = (): string => {
     if (!initialCategoryParam) return "All";
-    const found = DEFAULT_CATEGORIES.find(
-      (c) =>
-        c.value.toLowerCase().replace(/\s+/g, "-") ===
-        initialCategoryParam.toLowerCase()
-    );
-    return found ? found.value : initialCategoryParam;
+    return initialCategoryParam;
   };
 
   const [selectedCategory, setSelectedCategory] = useState<string>(getInitialCategory);

@@ -357,12 +357,13 @@ export async function getCategories(): Promise<NekaraCategory[]> {
         name: data.name || "Sarees",
         slug: data.slug || docSnap.id,
         description: data.description || "",
+        image: data.image || data.imageUrl || "",
         active: data.active !== false,
       });
     });
 
     categories.sort((a, b) => a.name.localeCompare(b.name));
-    return categories;
+    return categories.filter((c) => c.active !== false);
   } catch (error: any) {
     console.error("[NEKARA] Error fetching categories from Firestore:", error?.code || error?.message || error);
     return [];
