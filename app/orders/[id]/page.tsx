@@ -101,6 +101,16 @@ export default function OrderDetailPage({ params }: PageProps) {
   const [order, setOrder] = useState<NekaraOrder | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [notFound, setNotFound] = useState<boolean>(false);
+  const [isPaymentSuccessBanner, setIsPaymentSuccessBanner] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("payment") === "success") {
+        setIsPaymentSuccessBanner(true);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -188,6 +198,23 @@ export default function OrderDetailPage({ params }: PageProps) {
             <span>Back to My Orders</span>
           </Link>
         </div>
+
+        {/* Payment Confirmation Banner */}
+        {isPaymentSuccessBanner && (
+          <div className="bg-[#EBF5EE] border border-[#C2E3CD] rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="w-8 h-8 rounded-full bg-[#064238] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5">
+              <CheckIcon size={16} />
+            </div>
+            <div>
+              <h3 className="font-serif text-base font-bold text-[#064238]">
+                Payment Successful &amp; Order Confirmed
+              </h3>
+              <p className="text-xs text-[#064238]/80 font-sans mt-0.5 leading-relaxed">
+                Thank you for your patronage! Your transaction has been securely verified with Razorpay, and our master weavers are preparing your sarees for insured delivery.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Order Header Summary Banner */}
         <div className="bg-[#FFFBF5] rounded-xs border border-[#B58A45]/30 p-6 sm:p-8 shadow-[0_4px_24px_rgba(58,33,21,0.04)]">
