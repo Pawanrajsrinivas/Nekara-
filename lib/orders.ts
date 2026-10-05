@@ -67,6 +67,12 @@ export async function getUserOrders(userId: string): Promise<NekaraOrder[]> {
     const orders: NekaraOrder[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data();
+
+      // Skip orders that the customer opted to remove
+      if (data.hiddenFromCustomer) {
+        return;
+      }
+
       orders.push({
         id: docSnap.id,
         userId: data.userId || userId,
@@ -78,6 +84,7 @@ export async function getUserOrders(userId: string): Promise<NekaraOrder[]> {
         razorpayPaymentId: data.razorpayPaymentId,
         razorpaySignature: data.razorpaySignature,
         status: data.status || "Confirmed",
+        orderStatus: data.orderStatus,
         paymentStatus: data.paymentStatus || (data.status === "PAID" ? "Paid" : "Pending"),
         items: Array.isArray(data.items) ? data.items : [],
         totalAmount:
@@ -87,6 +94,9 @@ export async function getUserOrders(userId: string): Promise<NekaraOrder[]> {
         subtotal: data.subtotal,
         shippingFee: data.shippingFee,
         shippingAddress: data.shippingAddress || undefined,
+        hiddenFromCustomer: data.hiddenFromCustomer,
+        deletedAt: data.deletedAt,
+        deletedBy: data.deletedBy,
         paidAt: data.paidAt,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
@@ -139,6 +149,11 @@ export async function getOrderById(
       console.warn(
         `[NEKARA ORDERS] Security violation: User ${userId} attempted to access order ${orderId} owned by ${data.userId}`
       );
+      return null;
+    }
+
+    // If soft-deleted by customer, treat as non-existent for client
+    if (data.hiddenFromCustomer) {
       return null;
     }
 

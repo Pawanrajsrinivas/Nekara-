@@ -344,3 +344,91 @@ export async function cancelOrFailOrder(
   }
 }
 
+export interface SoftDeleteOrderParams {
+  orderId: string;
+  userId: string;
+}
+
+/**
+ * Safely removes a failed or cancelled order from the customer's view.
+ * Performs an audit-safe soft-delete (hiddenFromCustomer: true, deletedAt, deletedBy: "customer")
+ * to preserve forensic and payment attempt logs on the server while hiding the record from the user.
+ * Strictly prohibits deleting paid, confirmed, processing, shipped, or delivered orders.
+ */
+export async function softDeleteCustomerOrder(
+  params: SoftDeleteOrderParams
+): Promise<{ success: boolean; error?: string }> {
+  const { orderId, userId } = params;
+
+  if (!orderId || !userId) {
+    return { success: false, error: "Order ID and User ID are required." };
+  }
+
+  try {
+    const adminDb = getAdminDb();
+    if (!adminDb) {
+      throw new Error("Database service unavailable.");
+    }
+
+    const orderRef = adminDb.collection("orders").doc(orderId);
+    const snap = await orderRef.get();
+
+    if (!snap.exists) {
+      return { success: false, error: "Order not found." };
+    }
+
+    const data = snap.data();
+
+    // Security check: Must belong to this customer
+    if (data?.userId && data.userId !== userId) {
+      return { success: false, error: "Unauthorized: You do not own this order." };
+    }
+
+    // Protection check: Never allow deleting paid, confirmed, or fulfilled orders
+    const paymentStatusUpper = (data?.paymentStatus || "").toUpperCase();
+    const statusUpper = (data?.status || "").toUpperCase();
+
+    if (
+      paymentStatusUpper === "PAID" ||
+      statusUpper === "PAID" ||
+      statusUpper === "CONFIRMED" ||
+      statusUpper === "PROCESSING" ||
+      statusUpper === "SHIPPED" ||
+      statusUpper === "DELIVERED"
+    ) {
+      return {
+        success: false,
+        error: "Completed purchases cannot be removed. Only cancelled or failed orders can be removed.",
+      };
+    }
+
+    // Eligibility check: strictly cancelled or failed
+    const isCancelled =
+      paymentStatusUpper === "CANCELLED" || statusUpper === "CANCELLED";
+    const isFailed =
+      paymentStatusUpper === "FAILED" || statusUpper === "FAILED";
+
+    if (!isCancelled && !isFailed) {
+      return {
+        success: false,
+        error: "This order is not in a cancelled or failed state and cannot be removed.",
+      };
+    }
+
+    await orderRef.update(
+      sanitizeFirestoreData({
+        hiddenFromCustomer: true,
+        deletedAt: FieldValue.serverTimestamp(),
+        deletedBy: "customer",
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    );
+
+    console.log(`[NEKARA ORDERS] Order ${orderId} soft-deleted by customer ${userId}.`);
+    return { success: true };
+  } catch (err: any) {
+    console.error(`[NEKARA ORDERS] Error removing order ${orderId}:`, err);
+    return { success: false, error: err.message || "Failed to remove order." };
+  }
+}
+

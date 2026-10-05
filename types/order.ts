@@ -80,6 +80,9 @@ export interface NekaraOrder {
   shippingFee?: number;
   shippingAddress?: ShippingAddress;
   notes?: string;
+  hiddenFromCustomer?: boolean;
+  deletedAt?: any;
+  deletedBy?: string;
   paidAt?: any;
   createdAt?: any;
   updatedAt?: any;

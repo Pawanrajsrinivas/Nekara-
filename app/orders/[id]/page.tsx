@@ -122,6 +122,8 @@ export default function OrderDetailPage({ params }: PageProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [notFound, setNotFound] = useState<boolean>(false);
   const [isPaymentSuccessBanner, setIsPaymentSuccessBanner] = useState<boolean>(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -131,6 +133,33 @@ export default function OrderDetailPage({ params }: PageProps) {
       }
     }
   }, []);
+
+  const handleRemoveOrder = async () => {
+    if (!user || !order) return;
+
+    try {
+      setIsDeleting(true);
+      const idToken = await user.getIdToken().catch(() => null);
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+
+      const res = await fetch("/api/orders/remove-order", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ orderId: order.id, userId: user.uid }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || "Failed to remove order.");
+      }
+
+      router.push("/orders");
+    } catch (err: any) {
+      alert(err.message || "Failed to remove order.");
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -225,13 +254,36 @@ export default function OrderDetailPage({ params }: PageProps) {
             <div className="w-8 h-8 rounded-full bg-[#064238] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5">
               <CheckIcon size={16} />
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-serif text-base font-bold text-[#064238]">
                 Payment Successful &amp; Order Confirmed
               </h3>
               <p className="text-xs text-[#064238]/80 font-sans mt-0.5 leading-relaxed">
                 Thank you for your patronage! Your transaction has been securely verified with Razorpay, and our master weavers are preparing your sarees for insured delivery.
               </p>
+              <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+                {order.items.length === 1 && (order.items[0].slug || order.items[0].productId) ? (
+                  <Link
+                    href={`/product/${order.items[0].slug || order.items[0].productId}`}
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-xs bg-[#064238] hover:bg-[#02221D] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs"
+                  >
+                    View Purchased Saree →
+                  </Link>
+                ) : order.items.length > 1 ? (
+                  <a
+                    href="#order-items"
+                    className="inline-flex items-center justify-center px-4 py-2 rounded-xs bg-[#064238] hover:bg-[#02221D] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs"
+                  >
+                    View Purchased Sarees ({order.items.length}) ↓
+                  </a>
+                ) : null}
+                <Link
+                  href="/shop"
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-xs border border-[#064238]/40 hover:bg-[#064238]/10 text-[#064238] font-sans font-semibold text-xs tracking-wider uppercase transition-all"
+                >
+                  Continue Shopping
+                </Link>
+              </div>
             </div>
           </div>
         )}
@@ -249,13 +301,20 @@ export default function OrderDetailPage({ params }: PageProps) {
               <p className="text-xs text-[#3A2115]/80 font-sans mt-0.5 leading-relaxed">
                 The checkout window was closed before completing payment. No sarees or inventory have been reserved.
               </p>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2.5">
                 <Link
                   href={`/payment-failed?orderId=${order.id}&status=cancelled`}
                   className="inline-flex items-center justify-center px-5 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs"
                 >
                   Retry Payment
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-xs border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 font-sans font-semibold text-xs tracking-wider uppercase transition-all"
+                >
+                  Remove Order
+                </button>
               </div>
             </div>
           </div>
@@ -274,13 +333,20 @@ export default function OrderDetailPage({ params }: PageProps) {
               <p className="text-xs text-[#3A2115]/80 font-sans mt-0.5 leading-relaxed">
                 The payment attempt was declined or could not be completed. If money was debited from your account, it will be refunded according to your bank&apos;s standard reversal timeline (5–7 business days).
               </p>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2.5">
                 <Link
                   href={`/payment-failed?orderId=${order.id}&status=failed`}
                   className="inline-flex items-center justify-center px-5 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs"
                 >
                   Retry Payment
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="inline-flex items-center justify-center px-4 py-2 rounded-xs border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 font-sans font-semibold text-xs tracking-wider uppercase transition-all"
+                >
+                  Remove Order
+                </button>
               </div>
             </div>
           </div>
@@ -339,7 +405,7 @@ export default function OrderDetailPage({ params }: PageProps) {
           </div>
 
           {/* Purchased Items List */}
-          <div className="py-6 border-b border-[#B58A45]/20 space-y-4">
+          <div id="order-items" className="py-6 border-b border-[#B58A45]/20 space-y-4 scroll-mt-24">
             <h3 className="font-serif text-base text-[#241A15] font-medium">
               Order Items ({order.items.length})
             </h3>
@@ -361,12 +427,20 @@ export default function OrderDetailPage({ params }: PageProps) {
                       />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-serif text-base text-[#241A15] font-normal">
+                      <h4 className="font-serif text-base text-[#241A15] font-normal truncate">
                         {item.name}
                       </h4>
                       <p className="text-xs text-[#3A2115]/60 font-sans mt-0.5">
                         Qty: {item.quantity} × {formatINR(item.price)}
                       </p>
+                      {(item.slug || item.productId) && (
+                        <Link
+                          href={`/product/${item.slug || item.productId}`}
+                          className="inline-flex items-center text-xs font-sans font-medium text-[#075E5A] hover:text-[#B58A45] hover:underline transition-colors mt-1"
+                        >
+                          View Product →
+                        </Link>
+                      )}
                     </div>
                   </div>
 
@@ -453,6 +527,38 @@ export default function OrderDetailPage({ params }: PageProps) {
           </div>
         </div>
       </div>
+
+      {/* Soft-Delete Confirmation Dialog Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-[#FFFBF5] border border-[#B58A45]/30 rounded-xs p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <h3 className="font-serif text-lg font-bold text-[#02221D]">
+              Remove this order?
+            </h3>
+            <p className="text-xs sm:text-sm text-[#3A2115]/75 font-sans leading-relaxed">
+              Are you sure you want to remove this cancelled payment order? This will remove the uncompleted order from your purchase history.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleRemoveOrder}
+                className="px-4 py-2 rounded-xs bg-rose-700 hover:bg-rose-800 text-white font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeleting ? "Removing..." : "Remove Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

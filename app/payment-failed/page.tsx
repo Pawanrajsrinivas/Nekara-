@@ -2,10 +2,14 @@
 
 import React, { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { loadRazorpayScript } from "@/lib/razorpay-client";
+import { getOrderById } from "@/lib/orders";
+import { NekaraOrder } from "@/types/order";
+import { formatINR } from "@/lib/products";
 
 function PaymentFailedContent() {
   const router = useRouter();
@@ -16,8 +20,48 @@ function PaymentFailedContent() {
   const statusParam = (searchParams.get("status") || "cancelled").toLowerCase();
   const isCancelled = statusParam === "cancelled";
 
+  const [order, setOrder] = useState<NekaraOrder | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (orderId && user) {
+      getOrderById(orderId, user.uid)
+        .then((data) => {
+          if (data) setOrder(data);
+        })
+        .catch((err) => console.warn("[PAYMENT FAILED] Could not load order details:", err));
+    }
+  }, [orderId, user]);
+
+  const handleRemoveOrder = async () => {
+    if (!orderId || !user) return;
+
+    try {
+      setIsDeleting(true);
+      const idToken = await user.getIdToken().catch(() => null);
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+
+      const res = await fetch("/api/orders/remove-order", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ orderId, userId: user.uid }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || "Failed to remove order.");
+      }
+
+      router.push("/orders");
+    } catch (err: any) {
+      alert(err.message || "Failed to remove order.");
+      setIsDeleting(false);
+    }
+  };
 
   const displayOrderId = orderId
     ? orderId.startsWith("NK-")
@@ -230,8 +274,50 @@ function PaymentFailedContent() {
             </div>
           )}
 
+          {/* Selected Sarees Snapshot */}
+          {order && order.items && order.items.length > 0 && (
+            <div className="mb-6 p-4 sm:p-5 rounded-xs bg-[#FAF6F0] border border-[#B58A45]/20 text-left">
+              <h4 className="font-serif text-xs sm:text-sm font-semibold uppercase tracking-wider text-[#241A15] mb-3">
+                Selected Sarees ({order.items.length})
+              </h4>
+              <div className="divide-y divide-[#B58A45]/15">
+                {order.items.map((item, idx) => (
+                  <div key={idx} className="py-2.5 first:pt-0 last:pb-0 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative w-12 h-14 bg-[#FAF3E7] rounded-xs overflow-hidden shrink-0 border border-[#B58A45]/20">
+                        <Image
+                          src={item.image || "/images/categories/silk-sarees.jpg"}
+                          alt={item.name}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-serif text-xs sm:text-sm text-[#241A15] truncate font-medium">
+                          {item.name}
+                        </p>
+                        <p className="text-[11px] text-[#3A2115]/60 font-sans">
+                          Qty: {item.quantity} · {formatINR(item.price)}
+                        </p>
+                      </div>
+                    </div>
+                    {(item.slug || item.productId) && (
+                      <Link
+                        href={`/product/${item.slug || item.productId}`}
+                        className="inline-flex items-center justify-center px-3 py-1.5 rounded-xs border border-[#075E5A]/40 hover:bg-[#075E5A] text-[#075E5A] hover:text-[#FAF5ED] font-sans font-medium text-[11px] uppercase tracking-wider transition-colors shrink-0"
+                      >
+                        View Product
+                      </Link>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             {orderId ? (
               <button
                 type="button"
@@ -242,6 +328,15 @@ function PaymentFailedContent() {
                 {isRetrying ? "Opening Checkout..." : "Try Payment Again"}
               </button>
             ) : null}
+
+            {order && order.items && order.items.length === 1 && (order.items[0].slug || order.items[0].productId) && (
+              <Link
+                href={`/product/${order.items[0].slug || order.items[0].productId}`}
+                className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 rounded-xs border border-[#075E5A] text-[#075E5A] hover:bg-[#075E5A] hover:text-[#FAF5ED] font-sans font-semibold text-xs tracking-[0.18em] uppercase transition-all min-h-[46px]"
+              >
+                View Product
+              </Link>
+            )}
 
             <Link
               href="/cart"
@@ -259,6 +354,16 @@ function PaymentFailedContent() {
               </Link>
             )}
 
+            {orderId && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-3 rounded-xs border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 font-sans font-semibold text-xs tracking-[0.18em] uppercase transition-all min-h-[46px]"
+              >
+                Remove Order
+              </button>
+            )}
+
             <Link
               href="/shop"
               className="w-full sm:w-auto inline-flex items-center justify-center px-6 py-3 rounded-xs text-[#3A2115]/70 hover:text-[#02221D] font-sans font-semibold text-xs tracking-[0.18em] uppercase transition-all min-h-[46px]"
@@ -268,6 +373,38 @@ function PaymentFailedContent() {
           </div>
         </div>
       </div>
+
+      {/* Soft-Delete Confirmation Dialog Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-[#FFFBF5] border border-[#B58A45]/30 rounded-xs p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <h3 className="font-serif text-lg font-bold text-[#02221D]">
+              Remove this order?
+            </h3>
+            <p className="text-xs sm:text-sm text-[#3A2115]/75 font-sans leading-relaxed">
+              Are you sure you want to remove this cancelled payment order? This will remove the uncompleted order from your purchase history.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleRemoveOrder}
+                className="px-4 py-2 rounded-xs bg-rose-700 hover:bg-rose-800 text-white font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeleting ? "Removing..." : "Remove Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

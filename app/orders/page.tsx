@@ -112,6 +112,8 @@ export default function MyOrdersPage() {
   const [orders, setOrders] = useState<NekaraOrder[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Protect private orders page
   useEffect(() => {
@@ -135,6 +137,35 @@ export default function MyOrdersPage() {
       setLoading(false);
     }
   }, [user]);
+
+  const handleRemoveOrder = async (targetOrderId: string) => {
+    if (!user) return;
+
+    try {
+      setIsDeleting(true);
+      const idToken = await user.getIdToken().catch(() => null);
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (idToken) headers["Authorization"] = `Bearer ${idToken}`;
+
+      const res = await fetch("/api/orders/remove-order", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ orderId: targetOrderId, userId: user.uid }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || "Failed to remove order.");
+      }
+
+      setOrders((prev) => prev.filter((o) => o.id !== targetOrderId));
+      setOrderToDelete(null);
+    } catch (err: any) {
+      alert(err.message || "Failed to remove order.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -312,6 +343,14 @@ export default function MyOrdersPage() {
                               <p className="text-[11px] text-[#3A2115]/60 font-sans mt-0.5">
                                 Qty: {item.quantity} × {formatINR(item.price)}
                               </p>
+                              {(item.slug || item.productId) && (
+                                <Link
+                                  href={`/product/${item.slug || item.productId}`}
+                                  className="inline-flex items-center text-[11px] font-sans font-medium text-[#075E5A] hover:text-[#B58A45] hover:underline transition-colors mt-1"
+                                >
+                                  View Product →
+                                </Link>
+                              )}
                             </div>
                           </div>
 
@@ -336,17 +375,26 @@ export default function MyOrdersPage() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
                       {(order.paymentStatus === "Cancelled" ||
                         order.paymentStatus === "Failed" ||
                         order.status === "Cancelled" ||
                         order.status === "Failed") && (
-                        <Link
-                          href={`/payment-failed?orderId=${order.id}&status=${(order.paymentStatus || order.status).toLowerCase()}`}
-                          className="inline-flex items-center justify-center px-4 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs min-h-[40px]"
-                        >
-                          Retry Payment
-                        </Link>
+                        <>
+                          <Link
+                            href={`/payment-failed?orderId=${order.id}&status=${(order.paymentStatus || order.status).toLowerCase()}`}
+                            className="inline-flex items-center justify-center px-4 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs min-h-[40px]"
+                          >
+                            Retry Payment
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => setOrderToDelete(order.id)}
+                            className="inline-flex items-center justify-center px-4 py-2 rounded-xs border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 font-sans font-semibold text-xs tracking-wider uppercase transition-all min-h-[40px]"
+                          >
+                            Remove Order
+                          </button>
+                        </>
                       )}
                       <Link
                         href={`/orders/${order.id}`}
@@ -362,6 +410,38 @@ export default function MyOrdersPage() {
           </div>
         )}
       </div>
+
+      {/* Soft-Delete Confirmation Dialog Modal */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-[#FFFBF5] border border-[#B58A45]/30 rounded-xs p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <h3 className="font-serif text-lg font-bold text-[#02221D]">
+              Remove this order?
+            </h3>
+            <p className="text-xs sm:text-sm text-[#3A2115]/75 font-sans leading-relaxed">
+              Are you sure you want to remove this cancelled payment order? This will remove the uncompleted order from your purchase history.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setOrderToDelete(null)}
+                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleRemoveOrder(orderToDelete)}
+                className="px-4 py-2 rounded-xs bg-rose-700 hover:bg-rose-800 text-white font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isDeleting ? "Removing..." : "Remove Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
