@@ -11,11 +11,9 @@
 
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore, FieldValue } from "firebase-admin/firestore";
-import { getAuth, type Auth } from "firebase-admin/auth";
 
 let adminApp: App | undefined;
 let adminDb: Firestore | undefined;
-let adminAuth: Auth | undefined;
 
 /**
  * Checks if Firebase Admin credentials are configured in the environment.
@@ -176,17 +174,6 @@ export function getAdminDb(): Firestore {
     }
   }
   return adminDb;
-}
-
-/**
- * Returns the Firebase Admin Auth instance.
- */
-export function getAdminAuth(): Auth {
-  if (!adminAuth) {
-    const app = getAdminApp();
-    adminAuth = getAuth(app);
-  }
-  return adminAuth;
 }
 
 export { FieldValue };
