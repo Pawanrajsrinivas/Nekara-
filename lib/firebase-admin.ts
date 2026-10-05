@@ -62,6 +62,9 @@ function formatPrivateKey(rawKey: string): string {
     key = key.slice(2, -2).trim();
   }
 
+  // Replace double-escaped \\n with \n
+  key = key.replace(/\\\\n/g, "\n");
+
   // Replace escaped \n with actual newlines and remove Windows carriage returns
   key = key.replace(/\\n/g, "\n").replace(/\r/g, "");
 
@@ -165,9 +168,9 @@ export function getAdminDb(): Firestore {
   if (!adminDb) {
     const app = getAdminApp();
     adminDb = getFirestore(app);
-    // Explicitly configure settings if needed
+    // Explicitly configure settings for serverless environments (HTTP REST transport prevents gRPC channel hangs on Vercel/Lambda)
     try {
-      adminDb.settings({ ignoreUndefinedProperties: true });
+      adminDb.settings({ preferRest: true, ignoreUndefinedProperties: true });
     } catch {
       // Ignore if already initialized
     }
