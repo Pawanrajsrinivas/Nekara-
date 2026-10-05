@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Authoritative Server-side Gross-up Calculation (Recovers gateway fee while keeping base catalog clean)
+    // Authoritative Server-side Additive Calculation (2% Processing Fee + 18% GST on Fee)
     const serverSubtotal = serverTotalAmount;
     const breakdown = calculatePaymentBreakdown(serverSubtotal);
 
@@ -257,6 +257,8 @@ export async function POST(req: NextRequest) {
         itemCount: String(enrichedItems.length),
         subtotal: String(breakdown.subtotal),
         processingFee: String(breakdown.processingFee),
+        processingFeeBase: String(breakdown.processingFeeBase),
+        processingFeeGST: String(breakdown.processingFeeGST),
       },
     });
 
@@ -289,6 +291,8 @@ export async function POST(req: NextRequest) {
       totalAmount: breakdown.totalAmount,
       subtotal: breakdown.subtotal,
       paymentProcessingFee: breakdown.processingFee,
+      paymentProcessingFeeBase: breakdown.processingFeeBase,
+      paymentProcessingFeeGST: breakdown.processingFeeGST,
       shippingFee: 0,
       shippingAddress: {
         ...shippingAddress,
@@ -332,6 +336,8 @@ export async function POST(req: NextRequest) {
       currency: rzpOrder.currency,
       subtotal: breakdown.subtotal,
       paymentProcessingFee: breakdown.processingFee,
+      paymentProcessingFeeBase: breakdown.processingFeeBase,
+      paymentProcessingFeeGST: breakdown.processingFeeGST,
       totalAmount: breakdown.totalAmount,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || rawKeyId,
     });

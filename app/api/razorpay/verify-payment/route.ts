@@ -108,6 +108,8 @@ export async function POST(req: NextRequest) {
     let finalTotal = clientTotal || 0;
     let finalSubtotal: number | undefined = undefined;
     let finalProcessingFee: number | undefined = undefined;
+    let finalProcessingFeeBase: number | undefined = undefined;
+    let finalProcessingFeeGST: number | undefined = undefined;
     let finalShipping = clientShipping;
     let finalCustomerName = clientShipping?.fullName || clientShipping?.name;
     let finalCustomerEmail = clientShipping?.email;
@@ -169,6 +171,12 @@ export async function POST(req: NextRequest) {
       if (typeof orderData?.paymentProcessingFee === "number") {
         finalProcessingFee = orderData.paymentProcessingFee;
       }
+      if (typeof orderData?.paymentProcessingFeeBase === "number") {
+        finalProcessingFeeBase = orderData.paymentProcessingFeeBase;
+      }
+      if (typeof orderData?.paymentProcessingFeeGST === "number") {
+        finalProcessingFeeGST = orderData.paymentProcessingFeeGST;
+      }
       if (orderData?.shippingAddress) {
         finalShipping = orderData.shippingAddress;
       }
@@ -197,6 +205,8 @@ export async function POST(req: NextRequest) {
       totalAmount: finalTotal,
       subtotal: finalSubtotal !== undefined ? finalSubtotal : finalTotal,
       paymentProcessingFee: finalProcessingFee,
+      paymentProcessingFeeBase: finalProcessingFeeBase,
+      paymentProcessingFeeGST: finalProcessingFeeGST,
       shippingFee: 0,
       shippingAddress: finalShipping,
       customerName: finalCustomerName,

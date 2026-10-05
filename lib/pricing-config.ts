@@ -1,34 +1,41 @@
 /**
  * NEKARA Luxury Handlooms — Payment Processing Fee & Pricing Configuration
  *
- * BUSINESS LOGIC (Gross-Up Recovery Model):
- * To recover payment gateway processing costs while keeping base product prices
- * clean in catalog and inventory, an explicit "Payment processing fee" is computed
- * on the order subtotal.
+ * BUSINESS LOGIC (Direct Add-On Model):
+ * Product prices in Firestore catalog remain exact and clean (e.g. ₹2,500.00).
+ * A separate order-level payment processing fee is added on top of the product subtotal:
  *
- * Formula:
- * - baseFeePercent = 0.02 (2.0% standard Razorpay rate)
- * - taxPercent = 0.18 (18.0% GST on payment gateway services)
- * - effectiveFeeRate = baseFeePercent * (1 + taxPercent) = 0.0236 (2.36%)
- * - customerAmount = subtotal / (1 - effectiveFeeRate)
- * - processingFee = customerAmount - subtotal
- * - amountInPaise = Math.round(customerAmount * 100)
+ * 1. Base Gateway Processing Fee = 2% of product subtotal
+ *    Example: 2% of ₹2,500 = ₹50.00 (5,000 paise)
+ *
+ * 2. GST on Processing Fee = 18% of the 2% processing fee
+ *    Example: 18% of ₹50 = ₹9.00 (900 paise)
+ *
+ * 3. Total Payment Processing Fee = Base Processing Fee + GST on Fee
+ *    Example: ₹50.00 + ₹9.00 = ₹59.00 (5,900 paise)
+ *
+ * 4. Customer Grand Total = Product Subtotal + Total Payment Processing Fee
+ *    Example: ₹2,500.00 + ₹59.00 = ₹2,559.00 (255,900 paise)
+ *
+ * NOTE: NO GROSS-UP FORMULA IS USED. The fee is simply added on top of the subtotal.
  */
 
 export interface PaymentFeeConfig {
   enabled: boolean;
   baseFeePercent: number; // e.g. 0.02 for 2%
-  taxPercent: number; // e.g. 0.18 for 18% GST
+  taxPercent: number; // e.g. 0.18 for 18% GST on the fee
 }
 
 export const DEFAULT_PAYMENT_FEE_CONFIG: PaymentFeeConfig = {
   enabled: true,
-  baseFeePercent: 0.02,
-  taxPercent: 0.18,
+  baseFeePercent: 0.02, // 2% gateway processing fee
+  taxPercent: 0.18,     // 18% GST applied exclusively to the 2% processing fee
 };
 
 export interface PaymentBreakdown {
   subtotal: number;
+  processingFeeBase: number;
+  processingFeeGST: number;
   processingFee: number;
   totalAmount: number;
   amountInPaise: number;
@@ -42,26 +49,45 @@ export function calculatePaymentBreakdown(
   const cleanSubtotal = Math.max(0, typeof subtotal === "number" && !isNaN(subtotal) ? subtotal : 0);
 
   if (!config.enabled || cleanSubtotal <= 0) {
+    const subtotalInPaise = Math.round(cleanSubtotal * 100);
     return {
       subtotal: cleanSubtotal,
+      processingFeeBase: 0,
+      processingFeeGST: 0,
       processingFee: 0,
       totalAmount: cleanSubtotal,
-      amountInPaise: Math.round(cleanSubtotal * 100),
+      amountInPaise: subtotalInPaise,
       effectiveRatePercent: 0,
     };
   }
 
-  const effectiveRate = config.baseFeePercent * (1 + config.taxPercent); // 0.0236
-  const grossedUp = cleanSubtotal / (1 - effectiveRate);
-  const totalAmount = Math.round(grossedUp * 100) / 100;
-  const processingFee = Math.round((totalAmount - cleanSubtotal) * 100) / 100;
-  const amountInPaise = Math.round(totalAmount * 100);
+  // Work with integer paise to eliminate floating-point precision issues
+  const subtotalInPaise = Math.round(cleanSubtotal * 100);
+
+  // 1. 2% gateway fee on product subtotal
+  const processingFeeBaseInPaise = Math.round(subtotalInPaise * config.baseFeePercent);
+
+  // 2. 18% GST applied ON the 2% fee
+  const processingFeeGSTInPaise = Math.round(processingFeeBaseInPaise * config.taxPercent);
+
+  // 3. Total payment processing fee
+  const totalProcessingFeeInPaise = processingFeeBaseInPaise + processingFeeGSTInPaise;
+
+  // 4. Customer grand total
+  const totalAmountInPaise = subtotalInPaise + totalProcessingFeeInPaise;
+
+  const processingFeeBase = processingFeeBaseInPaise / 100;
+  const processingFeeGST = processingFeeGSTInPaise / 100;
+  const processingFee = totalProcessingFeeInPaise / 100;
+  const totalAmount = totalAmountInPaise / 100;
 
   return {
     subtotal: cleanSubtotal,
+    processingFeeBase,
+    processingFeeGST,
     processingFee,
     totalAmount,
-    amountInPaise,
-    effectiveRatePercent: Math.round(effectiveRate * 10000) / 100, // 2.36
+    amountInPaise: totalAmountInPaise,
+    effectiveRatePercent: 2.36,
   };
 }

@@ -78,6 +78,8 @@ export interface NekaraOrder {
   totalAmount: number;
   subtotal?: number;
   paymentProcessingFee?: number;
+  paymentProcessingFeeBase?: number;
+  paymentProcessingFeeGST?: number;
   shippingFee?: number;
   shippingAddress?: ShippingAddress;
   notes?: string;

@@ -61,6 +61,8 @@ export interface CompletePaidOrderParams {
   totalAmount: number;
   subtotal?: number;
   paymentProcessingFee?: number;
+  paymentProcessingFeeBase?: number;
+  paymentProcessingFeeGST?: number;
   shippingFee?: number;
   shippingAddress?: ShippingAddress;
   customerName?: string;
@@ -93,6 +95,8 @@ export async function completePaidOrder(
     totalAmount,
     subtotal,
     paymentProcessingFee,
+    paymentProcessingFeeBase,
+    paymentProcessingFeeGST,
     shippingFee,
     shippingAddress,
     customerName,
@@ -215,6 +219,14 @@ export async function completePaidOrder(
           paymentProcessingFee !== undefined
             ? paymentProcessingFee
             : (existingData?.paymentProcessingFee || 0),
+        paymentProcessingFeeBase:
+          paymentProcessingFeeBase !== undefined
+            ? paymentProcessingFeeBase
+            : (existingData?.paymentProcessingFeeBase || 0),
+        paymentProcessingFeeGST:
+          paymentProcessingFeeGST !== undefined
+            ? paymentProcessingFeeGST
+            : (existingData?.paymentProcessingFeeGST || 0),
         shippingFee: shippingFee || 0,
         shippingAddress: shippingAddress
           ? {
