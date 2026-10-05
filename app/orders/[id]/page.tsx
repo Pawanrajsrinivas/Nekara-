@@ -12,50 +12,70 @@ import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { ArrowLeftIcon, CheckIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
 
-function renderStatusBadge(status: OrderStatus | string) {
-  const upper = (status || "").toUpperCase();
+function renderOrderBadges(order: NekaraOrder) {
+  const payUpper = (
+    order.paymentStatus ||
+    (order.status === "PAID" ? "Paid" : order.status === "Cancelled" ? "Cancelled" : order.status === "Failed" ? "Failed" : "Pending")
+  ).toUpperCase();
+  const orderUpper = (order.orderStatus || order.status || "Pending").toUpperCase();
 
-  if (upper === "PAID" || upper === "DELIVERED") {
-    return (
+  let paymentBadge = null;
+  if (payUpper === "PAID") {
+    paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#EBF5EE] text-[#064238] border border-[#C2E3CD]">
         <span className="w-1.5 h-1.5 rounded-full bg-[#064238]" />
-        {status === "PAID" ? "Payment Completed" : "Delivered"}
+        Payment Completed
+      </span>
+    );
+  } else if (payUpper === "CANCELLED") {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FAF6F0] text-[#786D5F] border border-[#D9CDBB]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#786D5F]" />
+        Payment Cancelled
+      </span>
+    );
+  } else if (payUpper === "FAILED") {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
+        Payment Failed
+      </span>
+    );
+  } else {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FAF3E7] text-[#B58A45] border border-[#B58A45]/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#B58A45]" />
+        Payment Pending
       </span>
     );
   }
 
-  if (upper === "CONFIRMED") {
-    return (
+  let orderBadge = null;
+  if (orderUpper === "DELIVERED") {
+    orderBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#EBF5EE] text-[#064238] border border-[#C2E3CD]">
+        Delivered
+      </span>
+    );
+  } else if (orderUpper === "SHIPPED") {
+    orderBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+        Dispatched / In Transit
+      </span>
+    );
+  } else if (orderUpper === "CONFIRMED" || orderUpper === "PROCESSING") {
+    orderBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#02221D]/10 text-[#02221D] border border-[#02221D]/20">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#02221D]" />
         Order Confirmed
       </span>
     );
   }
 
-  if (upper === "PROCESSING" || upper === "SHIPPED") {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
-        {status === "SHIPPED" ? "Dispatched / In Transit" : "Handloom Weaving & Inspection"}
-      </span>
-    );
-  }
-
-  if (upper === "CANCELLED" || upper === "FAILED") {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
-        {status === "CANCELLED" ? "Cancelled" : "Payment Failed"}
-      </span>
-    );
-  }
-
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FAF3E7] text-[#B58A45] border border-[#B58A45]/30">
-      <span className="w-1.5 h-1.5 rounded-full bg-[#B58A45]" />
-      {status || "Pending"}
-    </span>
+    <div className="flex flex-wrap items-center gap-2">
+      {paymentBadge}
+      {orderBadge}
+    </div>
   );
 }
 
@@ -200,7 +220,7 @@ export default function OrderDetailPage({ params }: PageProps) {
         </div>
 
         {/* Payment Confirmation Banner */}
-        {isPaymentSuccessBanner && (
+        {(isPaymentSuccessBanner || order.paymentStatus === "Paid" || order.status === "PAID") && (
           <div className="bg-[#EBF5EE] border border-[#C2E3CD] rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
             <div className="w-8 h-8 rounded-full bg-[#064238] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5">
               <CheckIcon size={16} />
@@ -216,12 +236,89 @@ export default function OrderDetailPage({ params }: PageProps) {
           </div>
         )}
 
+        {/* Payment Cancelled Banner */}
+        {(order.paymentStatus === "Cancelled" || order.status === "Cancelled") && (
+          <div className="bg-[#FAF6F0] border border-[#B58A45]/30 rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="w-8 h-8 rounded-full bg-[#FAF3E7] text-[#786D5F] border border-[#D9CDBB] flex items-center justify-center shrink-0 mt-0.5 font-bold">
+              ✕
+            </div>
+            <div className="flex-1">
+              <h3 className="font-serif text-base font-bold text-[#241A15]">
+                Payment Cancelled
+              </h3>
+              <p className="text-xs text-[#3A2115]/80 font-sans mt-0.5 leading-relaxed">
+                The checkout window was closed before completing payment. No sarees or inventory have been reserved.
+              </p>
+              <div className="mt-3">
+                <Link
+                  href={`/payment-failed?orderId=${order.id}&status=cancelled`}
+                  className="inline-flex items-center justify-center px-5 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs"
+                >
+                  Retry Payment
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Failed Banner */}
+        {(order.paymentStatus === "Failed" || order.status === "Failed") && (
+          <div className="bg-[#FEE2E2]/60 border border-[#FECACA] rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="w-8 h-8 rounded-full bg-[#DC2626] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5 font-bold">
+              !
+            </div>
+            <div className="flex-1">
+              <h3 className="font-serif text-base font-bold text-[#991B1B]">
+                Payment Unsuccessful
+              </h3>
+              <p className="text-xs text-[#3A2115]/80 font-sans mt-0.5 leading-relaxed">
+                The payment attempt was declined or could not be completed. If money was debited from your account, it will be refunded according to your bank&apos;s standard reversal timeline (5–7 business days).
+              </p>
+              <div className="mt-3">
+                <Link
+                  href={`/payment-failed?orderId=${order.id}&status=failed`}
+                  className="inline-flex items-center justify-center px-5 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs"
+                >
+                  Retry Payment
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Genuine Payment Pending Banner */}
+        {order.paymentStatus === "Pending" &&
+          order.status !== "Cancelled" &&
+          order.status !== "Failed" &&
+          order.status !== "PAID" &&
+          order.status !== "Confirmed" && (
+            <div className="bg-[#FAF3E7] border border-[#B58A45]/30 rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+              <div className="w-8 h-8 rounded-full bg-[#B58A45] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5 font-bold">
+                ⏳
+              </div>
+              <div>
+                <h3 className="font-serif text-base font-bold text-[#8C6B2D]">
+                  Payment Status: Pending
+                </h3>
+                <p className="text-xs text-[#3A2115]/80 font-sans mt-0.5 leading-relaxed">
+                  Your payment is currently being confirmed by the payment network. This order will automatically update upon payment confirmation.
+                </p>
+              </div>
+            </div>
+          )}
+
         {/* Order Header Summary Banner */}
         <div className="bg-[#FFFBF5] rounded-xs border border-[#B58A45]/30 p-6 sm:p-8 shadow-[0_4px_24px_rgba(58,33,21,0.04)]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-[#B58A45]/20 gap-4">
             <div>
               <span className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-[#B58A45] block mb-1">
-                PURCHASE CONFIRMATION
+                {order.paymentStatus === "Paid" || order.status === "PAID" || order.status === "Confirmed"
+                  ? "PURCHASE CONFIRMATION"
+                  : order.paymentStatus === "Cancelled" || order.status === "Cancelled"
+                  ? "CANCELLED CHECKOUT"
+                  : order.paymentStatus === "Failed" || order.status === "Failed"
+                  ? "FAILED PAYMENT"
+                  : "PENDING PAYMENT"}
               </span>
               <h1 className="font-serif text-2xl sm:text-3xl text-[#241A15] font-normal">
                 Order #{displayId}
@@ -232,7 +329,7 @@ export default function OrderDetailPage({ params }: PageProps) {
             </div>
 
             <div className="flex flex-col sm:items-end gap-2">
-              {renderStatusBadge(order.status)}
+              {renderOrderBadges(order)}
               {order.paymentId && (
                 <span className="text-[10px] font-mono text-[#3A2115]/60">
                   Ref: {order.paymentId}
@@ -344,7 +441,11 @@ export default function OrderDetailPage({ params }: PageProps) {
                   <span className="text-[#075E5A] font-medium">FREE</span>
                 </div>
                 <div className="pt-2 border-t border-[#B58A45]/20 flex justify-between font-serif text-base font-bold text-[#02221D]">
-                  <span>Total Paid</span>
+                  <span>
+                    {order.paymentStatus === "Paid" || order.status === "PAID"
+                      ? "Total Paid"
+                      : "Total Amount"}
+                  </span>
                   <span className="text-[#075E5A]">{formatINR(order.totalAmount)}</span>
                 </div>
               </div>

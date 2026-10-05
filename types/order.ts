@@ -9,7 +9,7 @@ export type OrderStatus =
   | "Failed"
   | "Refunded";
 
-export type PaymentStatus = "Pending" | "Paid" | "Failed" | "Refunded";
+export type PaymentStatus = "Pending" | "Paid" | "Failed" | "Cancelled" | "Refunded";
 
 export interface OrderItem {
   productId: string;
@@ -72,6 +72,7 @@ export interface NekaraOrder {
   razorpayPaymentId?: string;
   razorpaySignature?: string;
   status: OrderStatus;
+  orderStatus?: OrderStatus;
   paymentStatus?: PaymentStatus;
   items: OrderItem[];
   totalAmount: number;

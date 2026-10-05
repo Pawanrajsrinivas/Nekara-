@@ -8,12 +8,13 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 interface CreateOrderRequestBody {
+  orderId?: string; // Optional: provided when retrying an existing order
   userId: string;
-  items: Array<{
+  items?: Array<{
     productId: string;
     quantity: number;
   }>;
-  shippingAddress: ShippingAddress;
+  shippingAddress?: ShippingAddress;
 }
 
 export async function POST(req: NextRequest) {
@@ -32,7 +33,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body: CreateOrderRequestBody = await req.json();
-    const { userId, items, shippingAddress } = body;
+    const { userId } = body;
+    let { items, shippingAddress } = body;
 
     // Authenticate user via Bearer token if provided, falling back to body.userId
     let authenticatedUserId = userId;
@@ -59,6 +61,57 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const adminDb = getAdminDb();
+    if (!adminDb) {
+      return NextResponse.json(
+        { error: "Database service unavailable." },
+        { status: 503 }
+      );
+    }
+
+    // Handle Retry Flow: If an existing orderId is provided
+    let existingOrderData: any = null;
+    let orderId = body.orderId?.trim();
+
+    if (orderId) {
+      const existingSnap = await adminDb.collection("orders").doc(orderId).get();
+      if (!existingSnap.exists) {
+        return NextResponse.json(
+          { error: `Order "${orderId}" not found for retry.` },
+          { status: 404 }
+        );
+      }
+      existingOrderData = existingSnap.data();
+
+      // Guard: Never retry an order that is already paid
+      if (
+        existingOrderData?.status === "PAID" ||
+        existingOrderData?.status === "Confirmed" ||
+        existingOrderData?.paymentStatus === "Paid"
+      ) {
+        return NextResponse.json(
+          { error: "This order has already been paid and confirmed." },
+          { status: 400 }
+        );
+      }
+
+      // Guard: User authorization check
+      if (existingOrderData?.userId && existingOrderData.userId !== authenticatedUserId) {
+        return NextResponse.json(
+          { error: "Unauthorized access to retry this order." },
+          { status: 403 }
+        );
+      }
+
+      // Fall back to order items & shipping if not re-sent
+      if (!items || items.length === 0) {
+        items = existingOrderData.items;
+      }
+      if (!shippingAddress) {
+        shippingAddress = existingOrderData.shippingAddress;
+      }
+    }
+
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { error: "Cart is empty. Please add sarees before proceeding." },
@@ -70,14 +123,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Shipping details are incomplete. Name and phone are required." },
         { status: 400 }
-      );
-    }
-
-    const adminDb = getAdminDb();
-    if (!adminDb) {
-      return NextResponse.json(
-        { error: "Database service unavailable." },
-        { status: 503 }
       );
     }
 
@@ -208,12 +253,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 4. Generate unique NEKARA Order ID and stage pending order
+    // 4. Generate unique NEKARA Order ID (or reuse for retry) and stage pending order
     // NOTE: INVENTORY IS NOT DECREMENTED HERE. Zero stock deduction until verified payment.
-    const orderId = `NK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const finalOrderId =
+      orderId ||
+      `NK-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     const orderData = {
-      id: orderId,
+      id: finalOrderId,
       userId: authenticatedUserId,
       customerName: customerFullName,
       customerEmail,
@@ -228,7 +275,9 @@ export async function POST(req: NextRequest) {
       razorpayPaymentId: null,
       razorpaySignature: null,
       status: "Pending",
+      orderStatus: "Pending",
       paymentStatus: "Pending",
+      cancellationReason: null,
       items: enrichedItems,
       totalAmount: serverTotalAmount,
       subtotal: serverTotalAmount,
@@ -254,13 +303,13 @@ export async function POST(req: NextRequest) {
         totalAmount: serverTotalAmount,
         currency: "INR",
       },
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: existingOrderData?.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };
 
     try {
-      await adminDb.collection("orders").doc(orderId).set(sanitizeFirestoreData(orderData));
-      console.log(`[RAZORPAY STAGING] Successfully staged draft order ${orderId} in Firestore via Admin SDK.`);
+      await adminDb.collection("orders").doc(finalOrderId).set(sanitizeFirestoreData(orderData), { merge: true });
+      console.log(`[RAZORPAY STAGING] Successfully staged draft order ${finalOrderId} in Firestore via Admin SDK.`);
     } catch (stageErr: any) {
       console.warn(
         `[RAZORPAY STAGING NOTICE] Could not stage draft order in Firestore (${stageErr?.message || stageErr}). Payment gateway will proceed, and order will be finalized upon payment verification.`
@@ -269,7 +318,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      orderId,
+      orderId: finalOrderId,
       razorpayOrderId: rzpOrder.id,
       amount: rzpOrder.amount,
       currency: rzpOrder.currency,

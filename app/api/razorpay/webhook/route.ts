@@ -93,6 +93,45 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+    } else if (event === "payment.failed") {
+      const payment = payload.payload?.payment?.entity;
+      const razorpayOrderId = payment?.order_id;
+      const failureReason =
+        payment?.error_description ||
+        payment?.error_reason ||
+        "Payment transaction failed";
+
+      if (razorpayOrderId) {
+        const adminDb = getAdminDb();
+        if (adminDb) {
+          const snap = await adminDb
+            .collection("orders")
+            .where("razorpayOrderId", "==", razorpayOrderId)
+            .get();
+
+          if (!snap.empty) {
+            const targetDoc = snap.docs[0];
+            const targetData = targetDoc.data();
+            if (
+              targetData?.status !== "Confirmed" &&
+              targetData?.status !== "PAID" &&
+              targetData?.paymentStatus !== "Paid"
+            ) {
+              await targetDoc.ref.update({
+                status: "Failed",
+                orderStatus: "Failed",
+                paymentStatus: "Failed",
+                "payment.paymentStatus": "Failed",
+                cancellationReason: failureReason,
+                updatedAt: new Date(),
+              });
+              console.log(
+                `[RAZORPAY WEBHOOK]: Order ${targetDoc.id} marked as Failed from payment.failed event.`
+              );
+            }
+          }
+        }
+      }
     }
 
     return NextResponse.json({ received: true });

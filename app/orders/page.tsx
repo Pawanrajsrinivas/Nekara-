@@ -12,50 +12,70 @@ import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { OrdersIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
 
-function renderStatusBadge(status: OrderStatus | string) {
-  const upper = (status || "").toUpperCase();
+function renderOrderBadges(order: NekaraOrder) {
+  const payUpper = (
+    order.paymentStatus ||
+    (order.status === "PAID" ? "Paid" : order.status === "Cancelled" ? "Cancelled" : order.status === "Failed" ? "Failed" : "Pending")
+  ).toUpperCase();
+  const orderUpper = (order.orderStatus || order.status || "Pending").toUpperCase();
 
-  if (upper === "PAID" || upper === "DELIVERED") {
-    return (
+  let paymentBadge = null;
+  if (payUpper === "PAID") {
+    paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#EBF5EE] text-[#064238] border border-[#C2E3CD]">
         <span className="w-1.5 h-1.5 rounded-full bg-[#064238]" />
-        {status === "PAID" ? "Paid" : "Delivered"}
+        Payment Paid
+      </span>
+    );
+  } else if (payUpper === "CANCELLED") {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FAF6F0] text-[#786D5F] border border-[#D9CDBB]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#786D5F]" />
+        Payment Cancelled
+      </span>
+    );
+  } else if (payUpper === "FAILED") {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
+        Payment Failed
+      </span>
+    );
+  } else {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FAF3E7] text-[#B58A45] border border-[#B58A45]/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#B58A45]" />
+        Payment Pending
       </span>
     );
   }
 
-  if (upper === "CONFIRMED") {
-    return (
+  let orderBadge = null;
+  if (orderUpper === "DELIVERED") {
+    orderBadge = (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#EBF5EE] text-[#064238] border border-[#C2E3CD]">
+        Delivered
+      </span>
+    );
+  } else if (orderUpper === "SHIPPED") {
+    orderBadge = (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
+        Shipped
+      </span>
+    );
+  } else if (orderUpper === "CONFIRMED" || orderUpper === "PROCESSING") {
+    orderBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#02221D]/10 text-[#02221D] border border-[#02221D]/20">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#02221D]" />
         Confirmed
       </span>
     );
   }
 
-  if (upper === "PROCESSING" || upper === "SHIPPED") {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#D97706]" />
-        {status === "SHIPPED" ? "Shipped" : "Processing"}
-      </span>
-    );
-  }
-
-  if (upper === "CANCELLED" || upper === "FAILED") {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
-        {status === "CANCELLED" ? "Cancelled" : "Failed"}
-      </span>
-    );
-  }
-
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FAF3E7] text-[#B58A45] border border-[#B58A45]/30">
-      <span className="w-1.5 h-1.5 rounded-full bg-[#B58A45]" />
-      {status || "Pending"}
-    </span>
+    <div className="flex flex-wrap items-center gap-2">
+      {paymentBadge}
+      {orderBadge}
+    </div>
   );
 }
 
@@ -260,7 +280,7 @@ export default function MyOrdersPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                      {renderStatusBadge(order.status)}
+                      {renderOrderBadges(order)}
                     </div>
                   </div>
 
@@ -316,12 +336,25 @@ export default function MyOrdersPage() {
                       </span>
                     </div>
 
-                    <Link
-                      href={`/orders/${order.id}`}
-                      className="inline-flex items-center justify-center px-5 py-2 rounded-xs border border-[#B58A45]/40 hover:border-[#075E5A] hover:bg-[#075E5A] text-[#02221D] hover:text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs min-h-[40px]"
-                    >
-                      View Details
-                    </Link>
+                    <div className="flex items-center gap-2.5">
+                      {(order.paymentStatus === "Cancelled" ||
+                        order.paymentStatus === "Failed" ||
+                        order.status === "Cancelled" ||
+                        order.status === "Failed") && (
+                        <Link
+                          href={`/payment-failed?orderId=${order.id}&status=${(order.paymentStatus || order.status).toLowerCase()}`}
+                          className="inline-flex items-center justify-center px-4 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs min-h-[40px]"
+                        >
+                          Retry Payment
+                        </Link>
+                      )}
+                      <Link
+                        href={`/orders/${order.id}`}
+                        className="inline-flex items-center justify-center px-5 py-2 rounded-xs border border-[#B58A45]/40 hover:border-[#075E5A] hover:bg-[#075E5A] text-[#02221D] hover:text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs min-h-[40px]"
+                      >
+                        View Details
+                      </Link>
+                    </div>
                   </div>
                 </div>
               );

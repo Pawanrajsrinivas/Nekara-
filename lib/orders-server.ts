@@ -270,3 +270,77 @@ export async function completePaidOrder(
     };
   }
 }
+
+export interface CancelOrderParams {
+  orderId: string;
+  userId?: string;
+  paymentStatus: "Cancelled" | "Failed";
+  reason?: string;
+}
+
+/**
+ * Handles explicit cancellation or failure of a pending checkout attempt.
+ * Preserves stock untouched, keeps user cart intact, and marks order status accordingly.
+ * Strictly prevents overwriting already PAID or CONFIRMED orders.
+ */
+export async function cancelOrFailOrder(
+  params: CancelOrderParams
+): Promise<{ success: boolean; error?: string }> {
+  const { orderId, userId, paymentStatus, reason } = params;
+
+  try {
+    const adminDb = getAdminDb();
+    if (!adminDb) {
+      throw new Error("Database service unavailable.");
+    }
+
+    const orderRef = adminDb.collection("orders").doc(orderId);
+    const snap = await orderRef.get();
+
+    if (!snap.exists) {
+      return { success: false, error: "Order not found." };
+    }
+
+    const data = snap.data();
+    // Safety guard: NEVER downgrade an already paid/confirmed order
+    if (
+      data?.status === "PAID" ||
+      data?.status === "Confirmed" ||
+      data?.paymentStatus === "Paid"
+    ) {
+      console.log(
+        `[NEKARA ORDERS] Order ${orderId} is already paid. Cannot mark as ${paymentStatus}.`
+      );
+      return { success: true };
+    }
+
+    // Security check: if userId was provided, ensure it matches
+    if (userId && data?.userId && data.userId !== userId) {
+      return { success: false, error: "Unauthorized order access." };
+    }
+
+    await orderRef.update(
+      sanitizeFirestoreData({
+        status: paymentStatus,
+        orderStatus: paymentStatus,
+        paymentStatus: paymentStatus,
+        "payment.paymentStatus": paymentStatus,
+        cancellationReason:
+          reason ||
+          (paymentStatus === "Cancelled"
+            ? "Customer closed checkout before completing payment"
+            : "Payment transaction was rejected or failed"),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    );
+
+    console.log(
+      `[NEKARA ORDERS] Order ${orderId} successfully marked as ${paymentStatus}. Reason: ${reason || "N/A"}`
+    );
+    return { success: true };
+  } catch (err: any) {
+    console.error(`[NEKARA ORDERS] Error updating order ${orderId} to ${paymentStatus}:`, err);
+    return { success: false, error: err.message };
+  }
+}
+

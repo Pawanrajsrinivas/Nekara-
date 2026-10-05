@@ -8,7 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { formatINR } from "@/lib/products";
-import { loadRazorpayScript } from "@/lib/razorpay";
+import { loadRazorpayScript } from "@/lib/razorpay-client";
 import { cn } from "@/lib/utils";
 
 const INDIAN_STATES = [
@@ -287,13 +287,23 @@ export default function CartPage() {
           color: "#02221D",
         },
         modal: {
-          ondismiss: function () {
+          ondismiss: async function () {
             setIsPaymentLoading(false);
-            setPaymentAlert({
-              type: "info",
-              message:
-                "Payment was not completed. Your shopping bag and inventory remain safe and unchanged.",
-            });
+            try {
+              await fetch("/api/razorpay/cancel-order", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  orderId: orderData.orderId,
+                  status: "Cancelled",
+                  reason: "Customer closed payment checkout before completing payment",
+                  userId: user?.uid,
+                }),
+              });
+            } catch (dismissErr) {
+              console.warn("[CHECKOUT DISMISS] Cancellation notification failed:", dismissErr);
+            }
+            router.push(`/payment-failed?orderId=${orderData.orderId}&status=cancelled`);
           },
         },
         handler: async function (response: any) {
@@ -354,35 +364,49 @@ export default function CartPage() {
               // Redirect to order confirmation page
               router.push(`/orders/${orderData.orderId}?payment=success`);
             } else {
-              setPaymentAlert({
-                type: "error",
-                message:
-                  verifyData?.error ||
-                  "Payment received, but verification encountered an issue. Please contact NEKARA support.",
-              });
               setIsPaymentLoading(false);
+              router.push(
+                `/payment-failed?orderId=${orderData.orderId}&status=failed&reason=${encodeURIComponent(
+                  verifyData?.error || "Payment verification encountered an issue"
+                )}`
+              );
             }
           } catch (verifyErr: any) {
             console.error("[RAZORPAY CLIENT VERIFICATION ERROR]:", verifyErr);
-            setPaymentAlert({
-              type: "error",
-              message:
-                "Network interruption while confirming payment. Please visit My Orders to verify your purchase status.",
-            });
             setIsPaymentLoading(false);
+            router.push(
+              `/payment-failed?orderId=${orderData.orderId}&status=failed&reason=${encodeURIComponent(
+                verifyErr?.message || "Verification network interruption"
+              )}`
+            );
           }
         },
       };
 
       const rzpInstance = new (window as any).Razorpay(options);
-      rzpInstance.on("payment.failed", function (response: any) {
+      rzpInstance.on("payment.failed", async function (response: any) {
         setIsPaymentLoading(false);
-        setPaymentAlert({
-          type: "error",
-          message: `Payment failed: ${
-            response.error?.description || "Transaction was declined by bank."
-          }. Your cart remains unchanged and no inventory was deducted.`,
-        });
+        const failureReason =
+          response.error?.description || "Transaction was declined by bank.";
+        try {
+          await fetch("/api/razorpay/cancel-order", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId: orderData.orderId,
+              status: "Failed",
+              reason: failureReason,
+              userId: user?.uid,
+            }),
+          });
+        } catch (failErr) {
+          console.warn("[CHECKOUT FAILURE] Error notification failed:", failErr);
+        }
+        router.push(
+          `/payment-failed?orderId=${orderData.orderId}&status=failed&reason=${encodeURIComponent(
+            failureReason
+          )}`
+        );
       });
       rzpInstance.open();
     } catch (err: any) {
