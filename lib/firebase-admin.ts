@@ -1,0 +1,160 @@
+/**
+ * NEKARA Luxury Sarees — Firebase Admin SDK (Server-Side Only)
+ * 
+ * CRITICAL ARCHITECTURAL RULES:
+ * 1. This module MUST NEVER be imported into client components or browser contexts.
+ * 2. It is used exclusively by server API routes (/api/razorpay/...) and server actions
+ *    for trusted payment verification, atomic inventory decrements, and order finalization.
+ * 3. The Firebase Admin SDK operates with full administrative privileges on Firestore,
+ *    bypassing client-facing Firestore Security Rules while keeping rules strictly locked down.
+ */
+
+import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
+import { getFirestore, type Firestore, FieldValue } from "firebase-admin/firestore";
+import { getAuth, type Auth } from "firebase-admin/auth";
+
+let adminApp: App | undefined;
+let adminDb: Firestore | undefined;
+let adminAuth: Auth | undefined;
+
+/**
+ * Checks if Firebase Admin credentials are configured in the environment.
+ */
+export function isFirebaseAdminConfigured(): boolean {
+  // 1. Check for individual environment variables
+  if (
+    process.env.FIREBASE_CLIENT_EMAIL &&
+    process.env.FIREBASE_PRIVATE_KEY
+  ) {
+    return true;
+  }
+
+  // 2. Check for JSON service account string or base64
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT) {
+    return true;
+  }
+
+  // 3. Check for standard Google Application Credentials file
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Formats a raw private key string from environment variables,
+ * correctly restoring newlines (\n) and stripping accidental wrapping quotes.
+ */
+function formatPrivateKey(rawKey: string): string {
+  let key = rawKey.trim();
+  // Strip outer quotes if pasted with quotes
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+  return key.replace(/\\n/g, "\n");
+}
+
+/**
+ * Initializes or retrieves the Firebase Admin App singleton.
+ */
+export function getAdminApp(): App {
+  if (adminApp) {
+    return adminApp;
+  }
+
+  const existingApps = getApps();
+  if (existingApps.length > 0) {
+    adminApp = existingApps[0];
+    return adminApp;
+  }
+
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID?.trim() ||
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim() ||
+    "nekara-b0160";
+
+  // Option A: Full service account JSON or Base64 string in single env var
+  const serviceAccountJson =
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim() ||
+    process.env.FIREBASE_SERVICE_ACCOUNT?.trim();
+
+  if (serviceAccountJson) {
+    try {
+      let parsed = JSON.parse(
+        serviceAccountJson.startsWith("{")
+          ? serviceAccountJson
+          : Buffer.from(serviceAccountJson, "base64").toString("utf-8")
+      );
+      adminApp = initializeApp({
+        credential: cert(parsed),
+        projectId: parsed.project_id || projectId,
+      });
+      return adminApp;
+    } catch (e: any) {
+      console.error("[FIREBASE ADMIN] Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:", e.message);
+    }
+  }
+
+  // Option B: Individual environment variables
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+  const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+  if (clientEmail && rawPrivateKey) {
+    try {
+      const privateKey = formatPrivateKey(rawPrivateKey);
+      adminApp = initializeApp({
+        credential: cert({
+          projectId,
+          clientEmail,
+          privateKey,
+        }),
+        projectId,
+      });
+      return adminApp;
+    } catch (e: any) {
+      console.error("[FIREBASE ADMIN] Initialization with service account credentials failed:", e.message);
+    }
+  }
+
+  // Option C: Application Default Credentials or GCP Environment
+  try {
+    adminApp = initializeApp({ projectId });
+    return adminApp;
+  } catch (e: any) {
+    console.error("[FIREBASE ADMIN] Default credential initialization error:", e.message);
+    throw new Error(
+      "[FIREBASE ADMIN] Missing server-side credentials. Please configure FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in .env.local."
+    );
+  }
+}
+
+/**
+ * Returns the Firebase Admin Firestore instance.
+ */
+export function getAdminDb(): Firestore {
+  if (!adminDb) {
+    const app = getAdminApp();
+    adminDb = getFirestore(app);
+    // Explicitly configure settings if needed
+    try {
+      adminDb.settings({ ignoreUndefinedProperties: true });
+    } catch {
+      // Ignore if already initialized
+    }
+  }
+  return adminDb;
+}
+
+/**
+ * Returns the Firebase Admin Auth instance.
+ */
+export function getAdminAuth(): Auth {
+  if (!adminAuth) {
+    const app = getAdminApp();
+    adminAuth = getAuth(app);
+  }
+  return adminAuth;
+}
+
+export { FieldValue };

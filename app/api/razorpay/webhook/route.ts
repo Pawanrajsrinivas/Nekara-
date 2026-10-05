@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { completePaidOrder } from "@/lib/orders-server";
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { getAdminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -47,46 +46,49 @@ export async function POST(req: NextRequest) {
       const razorpayOrderId = payment?.order_id || payload.payload?.order?.entity?.id;
       const razorpayPaymentId = payment?.id;
 
-      if (razorpayOrderId && db && typeof db.type === "string") {
-        let targetOrder: any = null;
+      if (razorpayOrderId) {
+        const adminDb = getAdminDb();
+        if (adminDb) {
+          let targetOrder: any = null;
 
-        const q = query(
-          collection(db, "orders"),
-          where("razorpayOrderId", "==", razorpayOrderId)
-        );
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          targetOrder = { id: snap.docs[0].id, ...snap.docs[0].data() };
-        }
+          const snap = await adminDb
+            .collection("orders")
+            .where("razorpayOrderId", "==", razorpayOrderId)
+            .get();
 
-        if (targetOrder) {
-          // If order is not yet marked Paid/Confirmed, reconcile it
-          if (
-            targetOrder.status !== "Confirmed" &&
-            targetOrder.status !== "PAID" &&
-            targetOrder.paymentStatus !== "Paid"
-          ) {
-            console.log(
-              `[RAZORPAY WEBHOOK]: Reconciling order ${targetOrder.id} for payment ${razorpayPaymentId}`
-            );
+          if (!snap.empty) {
+            targetOrder = { id: snap.docs[0].id, ...snap.docs[0].data() };
+          }
 
-            await completePaidOrder({
-              orderId: targetOrder.id,
-              userId: targetOrder.userId,
-              paymentId: razorpayPaymentId || `pay_wh_${Date.now()}`,
-              razorpayOrderId,
-              razorpayPaymentId,
-              items: targetOrder.items || [],
-              totalAmount: targetOrder.totalAmount,
-              subtotal: targetOrder.subtotal,
-              shippingFee: targetOrder.shippingFee,
-              shippingAddress: targetOrder.shippingAddress,
-              customerName: targetOrder.customerName,
-              customerEmail: targetOrder.customerEmail,
-              customerPhone: targetOrder.customerPhone,
-            });
-          } else {
-            console.log(`[RAZORPAY WEBHOOK]: Order ${targetOrder.id} is already fulfilled.`);
+          if (targetOrder) {
+            // If order is not yet marked Paid/Confirmed, reconcile it
+            if (
+              targetOrder.status !== "Confirmed" &&
+              targetOrder.status !== "PAID" &&
+              targetOrder.paymentStatus !== "Paid"
+            ) {
+              console.log(
+                `[RAZORPAY WEBHOOK]: Reconciling order ${targetOrder.id} for payment ${razorpayPaymentId}`
+              );
+
+              await completePaidOrder({
+                orderId: targetOrder.id,
+                userId: targetOrder.userId,
+                paymentId: razorpayPaymentId || `pay_wh_${Date.now()}`,
+                razorpayOrderId,
+                razorpayPaymentId,
+                items: targetOrder.items || [],
+                totalAmount: targetOrder.totalAmount,
+                subtotal: targetOrder.subtotal,
+                shippingFee: targetOrder.shippingFee,
+                shippingAddress: targetOrder.shippingAddress,
+                customerName: targetOrder.customerName,
+                customerEmail: targetOrder.customerEmail,
+                customerPhone: targetOrder.customerPhone,
+              });
+            } else {
+              console.log(`[RAZORPAY WEBHOOK]: Order ${targetOrder.id} is already fulfilled.`);
+            }
           }
         }
       }

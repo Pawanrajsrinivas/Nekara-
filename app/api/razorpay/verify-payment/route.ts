@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { completePaidOrder } from "@/lib/orders-server";
-import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { getAdminDb } from "@/lib/firebase-admin";
 import { OrderItem, ShippingAddress } from "@/types/order";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +63,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Retrieve staged order data from Firestore
+    // 2. Retrieve staged order data using Firebase Admin SDK (Trusted Server-Side Authority)
+    const adminDb = getAdminDb();
+    if (!adminDb) {
+      return NextResponse.json(
+        { error: "Database service unavailable." },
+        { status: 503 }
+      );
+    }
+
     let finalItems: OrderItem[] = clientItems || [];
     let finalTotal = clientTotal || 0;
     let finalShipping = clientShipping;
@@ -72,23 +79,62 @@ export async function POST(req: NextRequest) {
     let finalCustomerEmail = clientShipping?.email;
     let finalCustomerPhone = clientShipping?.phone;
 
-    if (db && typeof db.type === "string") {
-      const orderSnap = await getDoc(doc(db, "orders", orderId));
-      if (orderSnap.exists()) {
-        const orderData = orderSnap.data();
-        if (orderData.items && Array.isArray(orderData.items)) {
-          finalItems = orderData.items;
-        }
-        if (typeof orderData.totalAmount === "number") {
-          finalTotal = orderData.totalAmount;
-        }
-        if (orderData.shippingAddress) {
-          finalShipping = orderData.shippingAddress;
-        }
-        if (orderData.customerName) finalCustomerName = orderData.customerName;
-        if (orderData.customerEmail) finalCustomerEmail = orderData.customerEmail;
-        if (orderData.customerPhone) finalCustomerPhone = orderData.customerPhone;
+    const orderRef = adminDb.collection("orders").doc(orderId);
+    const orderSnap = await orderRef.get();
+    const exists = typeof orderSnap.exists === "function" ? (orderSnap as any).exists() : Boolean(orderSnap.exists);
+
+    if (exists) {
+      const orderData = orderSnap.data();
+
+      // Security check: Validate user ownership if order has userId
+      if (orderData?.userId && orderData.userId !== userId) {
+        console.error(
+          `[RAZORPAY VERIFY SECURITY ALERT]: User ${userId} attempted to finalize order ${orderId} owned by ${orderData.userId}`
+        );
+        return NextResponse.json(
+          { error: "Access denied. Order does not belong to this user." },
+          { status: 403 }
+        );
       }
+
+      // Security check: Validate Razorpay order ID association
+      if (orderData?.razorpayOrderId && orderData.razorpayOrderId !== razorpayOrderId) {
+        console.error(
+          `[RAZORPAY VERIFY SECURITY ALERT]: Razorpay order ID mismatch. Expected ${orderData.razorpayOrderId}, received ${razorpayOrderId}`
+        );
+        return NextResponse.json(
+          { error: "Invalid payment association." },
+          { status: 400 }
+        );
+      }
+
+      // Idempotency: If already paid, return success immediately
+      if (
+        orderData?.status === "Confirmed" ||
+        orderData?.status === "PAID" ||
+        orderData?.paymentStatus === "Paid"
+      ) {
+        console.log(`[RAZORPAY VERIFY] Order ${orderId} already verified and fulfilled.`);
+        return NextResponse.json({
+          success: true,
+          orderId,
+          status: "Confirmed",
+          paymentId: orderData?.paymentId || razorpayPaymentId,
+        });
+      }
+
+      if (orderData?.items && Array.isArray(orderData.items) && orderData.items.length > 0) {
+        finalItems = orderData.items;
+      }
+      if (typeof orderData?.totalAmount === "number" && orderData.totalAmount > 0) {
+        finalTotal = orderData.totalAmount;
+      }
+      if (orderData?.shippingAddress) {
+        finalShipping = orderData.shippingAddress;
+      }
+      if (orderData?.customerName) finalCustomerName = orderData.customerName;
+      if (orderData?.customerEmail) finalCustomerEmail = orderData.customerEmail;
+      if (orderData?.customerPhone) finalCustomerPhone = orderData.customerPhone;
     }
 
     if (finalItems.length === 0) {
@@ -98,7 +144,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Atomically decrement stock and finalize order
+    // 3. Atomically decrement stock and finalize order via Firebase Admin SDK
     // Protected against duplicate execution (Idempotent)
     const result = await completePaidOrder({
       orderId,

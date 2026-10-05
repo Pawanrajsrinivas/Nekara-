@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRazorpay } from "@/lib/razorpay";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { getAdminDb, FieldValue } from "@/lib/firebase-admin";
 import { OrderItem, ShippingAddress } from "@/types/order";
+import { sanitizeFirestoreData } from "@/lib/orders-server";
 
 export const dynamic = "force-dynamic";
 
@@ -41,14 +41,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!db || typeof db.type !== "string") {
+    const adminDb = getAdminDb();
+    if (!adminDb) {
       return NextResponse.json(
         { error: "Database service unavailable." },
         { status: 503 }
       );
     }
 
-    // 1. Fetch live product data from Firestore on the server (Pricing Authority)
+    // 1. Fetch live product data from Firestore using Firebase Admin SDK (Pricing Authority)
     const enrichedItems: OrderItem[] = [];
     let serverTotalAmount = 0;
 
@@ -60,15 +61,17 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const snap = await getDoc(doc(db, "products", item.productId));
-      if (!snap.exists()) {
+      const snap = await adminDb.collection("products").doc(item.productId).get();
+      const exists = typeof snap.exists === "function" ? (snap as any).exists() : Boolean(snap.exists);
+
+      if (!exists) {
         return NextResponse.json(
           { error: `Product ID "${item.productId}" is not available in catalog.` },
           { status: 400 }
         );
       }
 
-      const prodData = snap.data();
+      const prodData = snap.data() || {};
 
       if (prodData.active === false) {
         return NextResponse.json(
@@ -96,7 +99,7 @@ export async function POST(req: NextRequest) {
 
       serverTotalAmount += unitPrice * item.quantity;
 
-      enrichedItems.push({
+      const itemEntry: OrderItem = {
         productId: item.productId,
         name: prodData.name || "Handloom Saree",
         price: unitPrice,
@@ -104,12 +107,19 @@ export async function POST(req: NextRequest) {
         subtotal: unitPrice * item.quantity,
         image: prodData.thumbnail || prodData.images?.[0] || "",
         slug: prodData.slug || item.productId,
-        fabric: prodData.fabric || undefined,
-        color: prodData.color || undefined,
-        colour: prodData.color || prodData.colour || undefined,
-        design: prodData.design || undefined,
-        sku: prodData.sku || prodData.productId || undefined,
-      });
+      };
+
+      if (prodData.fabric) itemEntry.fabric = prodData.fabric;
+      if (prodData.color || prodData.colour) {
+        itemEntry.color = prodData.color || prodData.colour;
+        itemEntry.colour = prodData.colour || prodData.color;
+      }
+      if (prodData.design) itemEntry.design = prodData.design;
+      if (prodData.sku || prodData.productId) {
+        itemEntry.sku = prodData.sku || prodData.productId;
+      }
+
+      enrichedItems.push(itemEntry);
     }
 
     if (serverTotalAmount <= 0) {
@@ -129,7 +139,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Safe Diagnostics Logging (NEVER logs secret)
-    const rawKeyId = (process.env.RAZORPAY_KEY_ID || "").trim();
+    const rawKeyId = (
+      process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
+    ).trim();
     const rawKeySecret = (process.env.RAZORPAY_KEY_SECRET || "").trim();
     console.log("[RAZORPAY] Credentials configured:", Boolean(rawKeyId && rawKeySecret));
     console.log("[RAZORPAY] Mode:", rawKeyId.startsWith("rzp_test_") ? "test" : rawKeyId.startsWith("rzp_live_") ? "live" : "unknown");
@@ -186,6 +198,13 @@ export async function POST(req: NextRequest) {
         name: customerFullName,
         email: customerEmail,
         phone: customerPhone,
+        house: shippingAddress.house || "",
+        area: shippingAddress.area || "",
+        landmark: shippingAddress.landmark || "",
+        city: shippingAddress.city || "",
+        state: shippingAddress.state || "",
+        pincode: shippingAddress.pincode || shippingAddress.postalCode || "",
+        postalCode: shippingAddress.postalCode || shippingAddress.pincode || "",
       },
       payment: {
         razorpayOrderId: rzpOrder.id,
@@ -194,11 +213,18 @@ export async function POST(req: NextRequest) {
         totalAmount: serverTotalAmount,
         currency: "INR",
       },
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     };
 
-    await setDoc(doc(db, "orders", orderId), orderData);
+    try {
+      await adminDb.collection("orders").doc(orderId).set(sanitizeFirestoreData(orderData));
+      console.log(`[RAZORPAY STAGING] Successfully staged draft order ${orderId} in Firestore via Admin SDK.`);
+    } catch (stageErr: any) {
+      console.warn(
+        `[RAZORPAY STAGING NOTICE] Could not stage draft order in Firestore (${stageErr?.message || stageErr}). Payment gateway will proceed, and order will be finalized upon payment verification.`
+      );
+    }
 
     return NextResponse.json({
       success: true,
@@ -214,9 +240,9 @@ export async function POST(req: NextRequest) {
     // Provide specific diagnostic feedback when Razorpay returns 401 Authentication Failure
     const isAuthFailure =
       err?.statusCode === 401 ||
-      err?.error?.code === "BAD_REQUEST_ERROR" &&
+      (err?.error?.code === "BAD_REQUEST_ERROR" &&
         typeof err?.error?.description === "string" &&
-        err.error.description.toLowerCase().includes("authentication failed");
+        err.error.description.toLowerCase().includes("authentication failed"));
 
     if (isAuthFailure) {
       return NextResponse.json(

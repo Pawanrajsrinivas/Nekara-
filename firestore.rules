@@ -29,12 +29,13 @@ service cloud.firestore {
     // ==========================================
     match /admins/{uid} {
       allow read: if isAuthenticated() && request.auth.uid == uid;
-      allow write: if false; // Only manageable via server / console
+      allow write: if false; // Only manageable via Firebase Console / Server
     }
 
     // ==========================================
     // 2. PRODUCTS (Public Read, Admin Write)
-    // Customers CANNOT modify products or stock.
+    // Browsers cannot modify products, pricing, or stock.
+    // Stock decrements occur securely on server via Firebase Admin SDK.
     // ==========================================
     match /products/{productId} {
       allow read: if true;
@@ -69,6 +70,7 @@ service cloud.firestore {
     // 6. USER SHOP BAG / CART
     // Canonical path: /carts/{userId} and /carts/{userId}/items/{itemId}
     // Only the authenticated owner can access their own cart.
+    // Server clears purchased items via Firebase Admin SDK.
     // ==========================================
     match /carts/{userId} {
       allow read, create, update, delete: if isOwner(userId);
@@ -80,21 +82,16 @@ service cloud.firestore {
 
     // ==========================================
     // 7. ORDERS
-    // Customers can view and query their own orders.
-    // Customers can create their own order during checkout.
-    // Admins have full access to view, update, and manage all orders.
+    // Read: Strictly restricted to order owner or Admin.
+    // Browser cannot directly create or modify orders or payment status.
+    // Orders are created, finalized, and verified securely by server via Firebase Admin SDK.
+    // Admins have full access to view, update status, and manage all orders.
     // ==========================================
     match /orders/{orderId} {
-      allow get: if isAuthenticated() && (
+      allow get, list: if isAuthenticated() && (
         resource.data.userId == request.auth.uid || isAdmin()
       );
-      allow list: if isAuthenticated() && (
-        resource.data.userId == request.auth.uid || isAdmin()
-      );
-      allow create: if isAuthenticated() && (
-        request.resource.data.userId == request.auth.uid || isAdmin()
-      );
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // ==========================================
