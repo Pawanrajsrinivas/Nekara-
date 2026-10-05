@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { isFirebaseAdminConfigured, getAdminDb } from "@/lib/firebase-admin";
-import { getRazorpay } from "@/lib/razorpay";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,16 +44,20 @@ export async function GET() {
     NEXT_PUBLIC_RAZORPAY_KEY_ID: Boolean(process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim()),
   };
 
+  let firebaseAdminImportError: string | null = null;
+  let firebaseAdminConfigured = false;
   let firebaseAdminInitialized = false;
   let firestoreRead = false;
   let sampleProductFound = false;
   let firestoreDurationMs = 0;
   let firestoreError: string | null = null;
 
-  // 1. Test Firebase Admin + Firestore with 3500ms safety timeout
+  // 1. Test Firebase Admin Module Import & Firestore
   const firestoreStartTime = Date.now();
   try {
-    const adminDb = getAdminDb();
+    const fbAdmin = await import("@/lib/firebase-admin");
+    firebaseAdminConfigured = fbAdmin.isFirebaseAdminConfigured();
+    const adminDb = fbAdmin.getAdminDb();
     if (adminDb) {
       firebaseAdminInitialized = true;
       const readPromise = adminDb.collection("products").limit(1).get();
@@ -71,10 +73,12 @@ export async function GET() {
   } catch (err: any) {
     firestoreDurationMs = Date.now() - firestoreStartTime;
     firestoreError = err?.message || String(err);
-    console.error("[DIAGNOSTICS] Firestore error:", firestoreError);
+    firebaseAdminImportError = err?.message || String(err);
+    console.error("[DIAGNOSTICS] Firebase Admin / Firestore error:", firestoreError);
   }
 
-  // 2. Test Razorpay Order Creation with 3500ms safety timeout
+  // 2. Test Razorpay Module Import & Order Creation
+  let razorpayImportError: string | null = null;
   let razorpayTestOrderSuccess = false;
   let razorpayTestOrderId: string | null = null;
   let razorpayTestDurationMs = 0;
@@ -82,7 +86,8 @@ export async function GET() {
 
   const rzpStartTime = Date.now();
   try {
-    const rzp = getRazorpay();
+    const rzpModule = await import("@/lib/razorpay");
+    const rzp = rzpModule.getRazorpay();
     const rzpPromise = rzp.orders.create({
       amount: 100, // ₹1 (100 paise)
       currency: "INR",
@@ -100,6 +105,7 @@ export async function GET() {
   } catch (err: any) {
     razorpayTestDurationMs = Date.now() - rzpStartTime;
     razorpayError = err?.message || err?.error?.description || String(err);
+    razorpayImportError = err?.message || String(err);
     console.error("[DIAGNOSTICS] Razorpay error:", razorpayError);
   }
 
@@ -118,8 +124,11 @@ export async function GET() {
     vercelEnv: process.env.VERCEL_ENV || "unknown",
     vercelRegion: process.env.VERCEL_REGION || "unknown",
     envCheck,
-    firebaseAdminConfigured: isFirebaseAdminConfigured(),
-    firebaseAdminInitialized,
+    firebaseAdmin: {
+      configured: firebaseAdminConfigured,
+      initialized: firebaseAdminInitialized,
+      importError: firebaseAdminImportError,
+    },
     firestore: {
       readSuccess: firestoreRead,
       sampleProductFound,
@@ -130,6 +139,7 @@ export async function GET() {
       orderCreateSuccess: razorpayTestOrderSuccess,
       testOrderId: razorpayTestOrderId,
       durationMs: razorpayTestDurationMs,
+      importError: razorpayImportError,
       error: razorpayError,
     },
   });
