@@ -508,8 +508,14 @@ export default function OrderDetailPage({ params }: PageProps) {
               <div className="p-4 bg-[#FAF6F0] rounded-xs border border-[#B58A45]/20 text-xs space-y-2 font-sans">
                 <div className="flex justify-between text-[#3A2115]/70">
                   <span>Subtotal</span>
-                  <span>{formatINR(subtotal)}</span>
+                  <span>{formatINR(order.subtotal || subtotal)}</span>
                 </div>
+                {typeof order.paymentProcessingFee === "number" && order.paymentProcessingFee > 0 && (
+                  <div className="flex justify-between text-[#3A2115]/70">
+                    <span>Payment processing fee</span>
+                    <span>{formatINR(order.paymentProcessingFee)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-[#3A2115]/70">
                   <span>Complimentary Shipping</span>
                   <span className="text-[#075E5A] font-medium">FREE</span>

@@ -3,6 +3,7 @@ import { getRazorpay } from "@/lib/razorpay";
 import { getAdminDb, isFirebaseAdminConfigured, FieldValue } from "@/lib/firebase-admin";
 import { OrderItem, ShippingAddress } from "@/types/order";
 import { sanitizeFirestoreData } from "@/lib/orders-server";
+import { calculatePaymentBreakdown } from "@/lib/pricing-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -206,8 +207,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Authoritative Server-side Gross-up Calculation (Recovers gateway fee while keeping base catalog clean)
+    const serverSubtotal = serverTotalAmount;
+    const breakdown = calculatePaymentBreakdown(serverSubtotal);
+
     // Razorpay amount in paise (1 INR = 100 paise). Minimum 100 paise (₹1).
-    const amountInPaise = Math.round(serverTotalAmount * 100);
+    const amountInPaise = breakdown.amountInPaise;
     if (amountInPaise < 100) {
       return NextResponse.json(
         { error: "Minimum order amount is ₹1.00." },
@@ -250,6 +255,8 @@ export async function POST(req: NextRequest) {
         customerName: customerFullName,
         customerPhone,
         itemCount: String(enrichedItems.length),
+        subtotal: String(breakdown.subtotal),
+        processingFee: String(breakdown.processingFee),
       },
     });
 
@@ -279,8 +286,9 @@ export async function POST(req: NextRequest) {
       paymentStatus: "Pending",
       cancellationReason: null,
       items: enrichedItems,
-      totalAmount: serverTotalAmount,
-      subtotal: serverTotalAmount,
+      totalAmount: breakdown.totalAmount,
+      subtotal: breakdown.subtotal,
+      paymentProcessingFee: breakdown.processingFee,
       shippingFee: 0,
       shippingAddress: {
         ...shippingAddress,
@@ -300,7 +308,7 @@ export async function POST(req: NextRequest) {
         razorpayOrderId: rzpOrder.id,
         razorpayPaymentId: null,
         paymentStatus: "Pending",
-        totalAmount: serverTotalAmount,
+        totalAmount: breakdown.totalAmount,
         currency: "INR",
       },
       createdAt: existingOrderData?.createdAt || FieldValue.serverTimestamp(),
@@ -322,6 +330,9 @@ export async function POST(req: NextRequest) {
       razorpayOrderId: rzpOrder.id,
       amount: rzpOrder.amount,
       currency: rzpOrder.currency,
+      subtotal: breakdown.subtotal,
+      paymentProcessingFee: breakdown.processingFee,
+      totalAmount: breakdown.totalAmount,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || rawKeyId,
     });
   } catch (err: any) {

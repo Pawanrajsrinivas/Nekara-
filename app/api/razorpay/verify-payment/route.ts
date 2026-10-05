@@ -106,6 +106,8 @@ export async function POST(req: NextRequest) {
 
     let finalItems: OrderItem[] = clientItems || [];
     let finalTotal = clientTotal || 0;
+    let finalSubtotal: number | undefined = undefined;
+    let finalProcessingFee: number | undefined = undefined;
     let finalShipping = clientShipping;
     let finalCustomerName = clientShipping?.fullName || clientShipping?.name;
     let finalCustomerEmail = clientShipping?.email;
@@ -161,6 +163,12 @@ export async function POST(req: NextRequest) {
       if (typeof orderData?.totalAmount === "number" && orderData.totalAmount > 0) {
         finalTotal = orderData.totalAmount;
       }
+      if (typeof orderData?.subtotal === "number" && orderData.subtotal > 0) {
+        finalSubtotal = orderData.subtotal;
+      }
+      if (typeof orderData?.paymentProcessingFee === "number") {
+        finalProcessingFee = orderData.paymentProcessingFee;
+      }
       if (orderData?.shippingAddress) {
         finalShipping = orderData.shippingAddress;
       }
@@ -187,7 +195,8 @@ export async function POST(req: NextRequest) {
       razorpaySignature,
       items: finalItems,
       totalAmount: finalTotal,
-      subtotal: finalTotal,
+      subtotal: finalSubtotal !== undefined ? finalSubtotal : finalTotal,
+      paymentProcessingFee: finalProcessingFee,
       shippingFee: 0,
       shippingAddress: finalShipping,
       customerName: finalCustomerName,

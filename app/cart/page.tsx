@@ -9,6 +9,7 @@ import { useCart } from "@/context/CartContext";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { formatINR } from "@/lib/products";
 import { loadRazorpayScript } from "@/lib/razorpay-client";
+import { calculatePaymentBreakdown } from "@/lib/pricing-config";
 import { cn } from "@/lib/utils";
 
 const INDIAN_STATES = [
@@ -54,6 +55,9 @@ export default function CartPage() {
     clearCartError,
     refreshLiveStock,
   } = useCart();
+
+  // Authoritative payment fee calculation for customer preview
+  const breakdown = calculatePaymentBreakdown(totalAmount);
 
   // Checkout UI step state
   const [isCheckoutStep, setIsCheckoutStep] = useState<boolean>(false);
@@ -339,7 +343,7 @@ export default function CartPage() {
                   colour: i.color,
                 })),
                 shippingAddress: structuredAddress,
-                totalAmount,
+                totalAmount: orderData?.totalAmount || breakdown.totalAmount,
               }),
             });
 
@@ -869,9 +873,18 @@ export default function CartPage() {
                   <div className="flex items-center justify-between">
                     <span>Subtotal ({totalItems} {totalItems === 1 ? "saree" : "sarees"})</span>
                     <span className="font-semibold text-[#241A15]">
-                      {formattedTotalAmount}
+                      {formatINR(breakdown.subtotal)}
                     </span>
                   </div>
+
+                  {breakdown.processingFee > 0 && (
+                    <div className="flex items-center justify-between text-xs text-[#3A2115]/75">
+                      <span>Payment processing fee</span>
+                      <span className="font-medium text-[#241A15]">
+                        {formatINR(breakdown.processingFee)}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between">
                     <span>Insured Delivery</span>
@@ -890,7 +903,7 @@ export default function CartPage() {
                       Total Payable
                     </span>
                     <span className="font-sans font-bold text-[#075E5A]">
-                      {formattedTotalAmount}
+                      {formatINR(breakdown.totalAmount)}
                     </span>
                   </div>
                 </div>
@@ -939,7 +952,7 @@ export default function CartPage() {
                         </>
                       ) : (
                         <>
-                          <span>🔒 Pay {formattedTotalAmount} via Razorpay</span>
+                          <span>🔒 Pay {formatINR(breakdown.totalAmount)} via Razorpay</span>
                         </>
                       )}
                     </button>

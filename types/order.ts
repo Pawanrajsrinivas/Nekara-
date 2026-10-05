@@ -77,6 +77,7 @@ export interface NekaraOrder {
   items: OrderItem[];
   totalAmount: number;
   subtotal?: number;
+  paymentProcessingFee?: number;
   shippingFee?: number;
   shippingAddress?: ShippingAddress;
   notes?: string;

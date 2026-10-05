@@ -60,6 +60,7 @@ export interface CompletePaidOrderParams {
   items: OrderItem[];
   totalAmount: number;
   subtotal?: number;
+  paymentProcessingFee?: number;
   shippingFee?: number;
   shippingAddress?: ShippingAddress;
   customerName?: string;
@@ -91,6 +92,7 @@ export async function completePaidOrder(
     items,
     totalAmount,
     subtotal,
+    paymentProcessingFee,
     shippingFee,
     shippingAddress,
     customerName,
@@ -208,7 +210,11 @@ export async function completePaidOrder(
         paymentMethod: "Razorpay",
         items: formattedItems,
         totalAmount,
-        subtotal: subtotal || totalAmount,
+        subtotal: subtotal !== undefined ? subtotal : (existingData?.subtotal || totalAmount),
+        paymentProcessingFee:
+          paymentProcessingFee !== undefined
+            ? paymentProcessingFee
+            : (existingData?.paymentProcessingFee || 0),
         shippingFee: shippingFee || 0,
         shippingAddress: shippingAddress
           ? {
