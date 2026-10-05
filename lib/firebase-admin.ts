@@ -23,19 +23,17 @@ let adminAuth: Auth | undefined;
 export function isFirebaseAdminConfigured(): boolean {
   // 1. Check for individual environment variables
   if (
-    process.env.FIREBASE_CLIENT_EMAIL &&
-    process.env.FIREBASE_PRIVATE_KEY
+    process.env.FIREBASE_CLIENT_EMAIL?.trim() &&
+    process.env.FIREBASE_PRIVATE_KEY?.trim()
   ) {
     return true;
   }
 
   // 2. Check for JSON service account string or base64
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.FIREBASE_SERVICE_ACCOUNT) {
-    return true;
-  }
-
-  // 3. Check for standard Google Application Credentials file
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  if (
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim() ||
+    process.env.FIREBASE_SERVICE_ACCOUNT?.trim()
+  ) {
     return true;
   }
 
@@ -44,15 +42,42 @@ export function isFirebaseAdminConfigured(): boolean {
 
 /**
  * Formats a raw private key string from environment variables,
- * correctly restoring newlines (\n) and stripping accidental wrapping quotes.
+ * correctly restoring newlines (\n), stripping accidental wrapping quotes,
+ * and handling Windows CRLF carriage returns.
  */
 function formatPrivateKey(rawKey: string): string {
+  if (!rawKey) return "";
   let key = rawKey.trim();
-  // Strip outer quotes if pasted with quotes
-  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
-    key = key.slice(1, -1);
+
+  // Strip wrapping single or double quotes
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1).trim();
   }
-  return key.replace(/\\n/g, "\n");
+
+  // Strip escaped quotes if passed as \"...\"
+  if (key.startsWith('\\"') && key.endsWith('\\"')) {
+    key = key.slice(2, -2).trim();
+  }
+
+  // Replace escaped \n with actual newlines and remove Windows carriage returns
+  key = key.replace(/\\n/g, "\n").replace(/\r/g, "");
+
+  // If base64 encoded private key was provided:
+  if (!key.includes("BEGIN PRIVATE KEY") && !key.includes("BEGIN RSA PRIVATE KEY")) {
+    try {
+      const decoded = Buffer.from(key, "base64").toString("utf-8");
+      if (decoded.includes("BEGIN PRIVATE KEY") || decoded.includes("BEGIN RSA PRIVATE KEY")) {
+        key = decoded.replace(/\r/g, "");
+      }
+    } catch {
+      // not base64, keep key
+    }
+  }
+
+  return key;
 }
 
 /**
@@ -117,16 +142,12 @@ export function getAdminApp(): App {
     }
   }
 
-  // Option C: Application Default Credentials or GCP Environment
-  try {
-    adminApp = initializeApp({ projectId });
-    return adminApp;
-  } catch (e: any) {
-    console.error("[FIREBASE ADMIN] Default credential initialization error:", e.message);
-    throw new Error(
-      "[FIREBASE ADMIN] Missing server-side credentials. Please configure FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in .env.local."
-    );
-  }
+  // No fallback — fail fast with a clear message instead of hanging 30s on metadata lookup
+  throw new Error(
+    "[FIREBASE ADMIN] Missing server-side credentials.\n" +
+    "Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in website/.env.local.\n" +
+    "Get them from: Firebase Console → nekara-b0160 → Project Settings → Service Accounts → Generate new private key."
+  );
 }
 
 /**

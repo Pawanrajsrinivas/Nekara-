@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRazorpay } from "@/lib/razorpay";
-import { getAdminDb, FieldValue } from "@/lib/firebase-admin";
+import { getAdminDb, getAdminAuth, isFirebaseAdminConfigured, FieldValue } from "@/lib/firebase-admin";
 import { OrderItem, ShippingAddress } from "@/types/order";
 import { sanitizeFirestoreData } from "@/lib/orders-server";
 
@@ -17,10 +17,41 @@ interface CreateOrderRequestBody {
 
 export async function POST(req: NextRequest) {
   try {
+    // 0. Fail fast if Firebase Admin credentials are not configured
+    if (!isFirebaseAdminConfigured()) {
+      console.error("[FIREBASE ADMIN] Credentials missing in environment variables.");
+      return NextResponse.json(
+        {
+          error:
+            "Firebase Admin credentials are missing. Configure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in .env.local.",
+          code: "FIREBASE_ADMIN_CONFIG_MISSING",
+        },
+        { status: 500 }
+      );
+    }
+
     const body: CreateOrderRequestBody = await req.json();
     const { userId, items, shippingAddress } = body;
 
-    if (!userId || typeof userId !== "string") {
+    // Authenticate user via Bearer token if provided, falling back to body.userId
+    let authenticatedUserId = userId;
+    const authHeader = req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const idToken = authHeader.substring(7).trim();
+      try {
+        const adminAuth = getAdminAuth();
+        if (adminAuth) {
+          const decoded = await adminAuth.verifyIdToken(idToken);
+          if (decoded?.uid) {
+            authenticatedUserId = decoded.uid;
+          }
+        }
+      } catch (tokenErr) {
+        console.warn("[AUTH WARNING] Bearer token verification failed:", tokenErr);
+      }
+    }
+
+    if (!authenticatedUserId || typeof authenticatedUserId !== "string") {
       return NextResponse.json(
         { error: "Authentication required. Missing user ID." },
         { status: 401 }
@@ -67,7 +98,7 @@ export async function POST(req: NextRequest) {
       if (!exists) {
         return NextResponse.json(
           { error: `Product ID "${item.productId}" is not available in catalog.` },
-          { status: 400 }
+          { status: 404 }
         );
       }
 
@@ -87,7 +118,7 @@ export async function POST(req: NextRequest) {
           {
             error: `Insufficient stock for "${prodData.name}". Available: ${currentStock}, Requested: ${item.quantity}.`,
           },
-          { status: 400 }
+          { status: 409 }
         );
       }
 
@@ -143,6 +174,15 @@ export async function POST(req: NextRequest) {
       process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
     ).trim();
     const rawKeySecret = (process.env.RAZORPAY_KEY_SECRET || "").trim();
+    if (!rawKeyId || !rawKeySecret) {
+      return NextResponse.json(
+        {
+          error: "Razorpay payment gateway credentials are not configured on the server. Please configure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+          code: "RAZORPAY_NOT_CONFIGURED",
+        },
+        { status: 500 }
+      );
+    }
     console.log("[RAZORPAY] Credentials configured:", Boolean(rawKeyId && rawKeySecret));
     console.log("[RAZORPAY] Mode:", rawKeyId.startsWith("rzp_test_") ? "test" : rawKeyId.startsWith("rzp_live_") ? "live" : "unknown");
     console.log("[RAZORPAY] Key Prefix:", rawKeyId ? `${rawKeyId.substring(0, 9)}...` : "missing");
@@ -160,7 +200,7 @@ export async function POST(req: NextRequest) {
       currency: "INR",
       receipt,
       notes: {
-        userId,
+        userId: authenticatedUserId,
         customerName: customerFullName,
         customerPhone,
         itemCount: String(enrichedItems.length),
@@ -173,7 +213,7 @@ export async function POST(req: NextRequest) {
 
     const orderData = {
       id: orderId,
-      userId,
+      userId: authenticatedUserId,
       customerName: customerFullName,
       customerEmail,
       customerPhone,

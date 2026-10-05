@@ -227,9 +227,15 @@ export default function CartPage() {
         shippingAddress: structuredAddress,
       };
 
+      const idToken = user ? await user.getIdToken().catch(() => null) : null;
+      const requestHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (idToken) {
+        requestHeaders["Authorization"] = `Bearer ${idToken}`;
+      }
+
       const createRes = await fetch("/api/razorpay/create-order", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: requestHeaders,
         body: JSON.stringify(orderPayload),
       });
 
@@ -272,9 +278,15 @@ export default function CartPage() {
           setPaymentStepText("Verifying payment authenticity & securing your sarees...");
 
           try {
+            const freshToken = user ? await user.getIdToken().catch(() => null) : null;
+            const verifyHeaders: Record<string, string> = { "Content-Type": "application/json" };
+            if (freshToken) {
+              verifyHeaders["Authorization"] = `Bearer ${freshToken}`;
+            }
+
             const verifyRes = await fetch("/api/razorpay/verify-payment", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: verifyHeaders,
               body: JSON.stringify({
                 orderId: orderData.orderId,
                 razorpayOrderId: response.razorpay_order_id,

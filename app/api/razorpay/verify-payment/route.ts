@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { completePaidOrder } from "@/lib/orders-server";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb, getAdminAuth, isFirebaseAdminConfigured } from "@/lib/firebase-admin";
 import { OrderItem, ShippingAddress } from "@/types/order";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +19,19 @@ interface VerifyPaymentBody {
 
 export async function POST(req: NextRequest) {
   try {
+    // 0. Fail fast if Firebase Admin credentials are not configured
+    if (!isFirebaseAdminConfigured()) {
+      console.error("[FIREBASE ADMIN] Credentials missing in environment variables.");
+      return NextResponse.json(
+        {
+          error:
+            "Firebase Admin credentials are missing. Configure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in .env.local.",
+          code: "FIREBASE_ADMIN_CONFIG_MISSING",
+        },
+        { status: 500 }
+      );
+    }
+
     const body: VerifyPaymentBody = await req.json();
     const {
       orderId,
@@ -38,11 +51,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Authenticate user via Bearer token if provided
+    let authenticatedUserId = userId;
+    const authHeader = req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const idToken = authHeader.substring(7).trim();
+      try {
+        const adminAuth = getAdminAuth();
+        if (adminAuth) {
+          const decoded = await adminAuth.verifyIdToken(idToken);
+          if (decoded?.uid) {
+            authenticatedUserId = decoded.uid;
+          }
+        }
+      } catch (tokenErr) {
+        console.warn("[AUTH WARNING] Bearer token verification failed:", tokenErr);
+      }
+    }
+
     const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
     if (!keySecret) {
       console.error("[RAZORPAY VERIFY ERROR]: RAZORPAY_KEY_SECRET is not configured on server.");
       return NextResponse.json(
-        { error: "Payment verification configuration error." },
+        { error: "Payment verification configuration error: RAZORPAY_KEY_SECRET missing." },
         { status: 500 }
       );
     }
@@ -87,9 +118,9 @@ export async function POST(req: NextRequest) {
       const orderData = orderSnap.data();
 
       // Security check: Validate user ownership if order has userId
-      if (orderData?.userId && orderData.userId !== userId) {
+      if (orderData?.userId && orderData.userId !== authenticatedUserId) {
         console.error(
-          `[RAZORPAY VERIFY SECURITY ALERT]: User ${userId} attempted to finalize order ${orderId} owned by ${orderData.userId}`
+          `[RAZORPAY VERIFY SECURITY ALERT]: User ${authenticatedUserId} attempted to finalize order ${orderId} owned by ${orderData.userId}`
         );
         return NextResponse.json(
           { error: "Access denied. Order does not belong to this user." },
@@ -148,7 +179,7 @@ export async function POST(req: NextRequest) {
     // Protected against duplicate execution (Idempotent)
     const result = await completePaidOrder({
       orderId,
-      userId,
+      userId: authenticatedUserId,
       paymentId: razorpayPaymentId,
       razorpayOrderId,
       razorpayPaymentId,
