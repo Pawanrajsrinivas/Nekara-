@@ -5,6 +5,7 @@ import { getAdminDb, getAdminAuth, isFirebaseAdminConfigured } from "@/lib/fireb
 import { OrderItem, ShippingAddress } from "@/types/order";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 interface VerifyPaymentBody {
   orderId: string;
@@ -216,9 +217,14 @@ export async function POST(req: NextRequest) {
       paymentId: razorpayPaymentId,
     });
   } catch (err: any) {
-    console.error("[RAZORPAY VERIFY PAYMENT EXCEPTION]:", err);
+    console.error("[RAZORPAY VERIFY PAYMENT] VERCEL SERVER ERROR");
+    console.error("[RAZORPAY VERIFY PAYMENT] Error type:", err?.name || "Error");
+    console.error("[RAZORPAY VERIFY PAYMENT] Error message:", err?.message || String(err));
     return NextResponse.json(
-      { error: err.message || "Failed to verify payment." },
+      {
+        success: false,
+        error: err.message || "Failed to verify payment.",
+      },
       { status: 500 }
     );
   }

@@ -77,6 +77,11 @@ function formatPrivateKey(rawKey: string): string {
     }
   }
 
+  // Ensure trailing newline for OpenSSL PEM parser
+  if (!key.endsWith("\n")) {
+    key += "\n";
+  }
+
   return key;
 }
 
@@ -139,6 +144,9 @@ export function getAdminApp(): App {
       return adminApp;
     } catch (e: any) {
       console.error("[FIREBASE ADMIN] Initialization with service account credentials failed:", e.message);
+      throw new Error(
+        `[FIREBASE ADMIN] Service account credential initialization failed: ${e.message}`
+      );
     }
   }
 

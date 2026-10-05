@@ -5,6 +5,7 @@ import { OrderItem, ShippingAddress } from "@/types/order";
 import { sanitizeFirestoreData } from "@/lib/orders-server";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 interface CreateOrderRequestBody {
   userId: string;
@@ -275,7 +276,9 @@ export async function POST(req: NextRequest) {
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || rawKeyId,
     });
   } catch (err: any) {
-    console.error("[RAZORPAY CREATE ORDER ERROR]:", err);
+    console.error("[RAZORPAY CREATE ORDER] VERCEL SERVER ERROR");
+    console.error("[RAZORPAY CREATE ORDER] Error type:", err?.name || "Error");
+    console.error("[RAZORPAY CREATE ORDER] Error message:", err?.message || String(err));
 
     // Provide specific diagnostic feedback when Razorpay returns 401 Authentication Failure
     const isAuthFailure =
@@ -287,8 +290,9 @@ export async function POST(req: NextRequest) {
     if (isAuthFailure) {
       return NextResponse.json(
         {
+          success: false,
           error:
-            "Razorpay authentication failed (401). Please verify that the active RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET from your Razorpay Dashboard (Test Mode) are saved in .env.local and that your Next.js server was restarted.",
+            "Razorpay authentication failed (401). Please verify that active RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET from Razorpay Dashboard (Test Mode) are saved in environment variables.",
           code: "RAZORPAY_AUTH_FAILED",
         },
         { status: 401 }
@@ -297,6 +301,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
+        success: false,
         error: err.message || "Failed to initialize payment gateway.",
       },
       { status: 500 }

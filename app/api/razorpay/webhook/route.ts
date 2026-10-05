@@ -4,6 +4,7 @@ import { completePaidOrder } from "@/lib/orders-server";
 import { getAdminDb } from "@/lib/firebase-admin";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {

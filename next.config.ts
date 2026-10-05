@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["firebase-admin"],
   allowedDevOrigins: ["192.168.0.106", "localhost:3001"],
   images: {
     remotePatterns: [

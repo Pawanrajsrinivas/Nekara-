@@ -239,10 +239,33 @@ export default function CartPage() {
         body: JSON.stringify(orderPayload),
       });
 
-      const orderData = await createRes.json();
-      if (!createRes.ok || !orderData.success) {
+      const createRawText = await createRes.text();
+      const createContentType = createRes.headers.get("content-type") || "";
+      let orderData: any;
+
+      if (!createRawText || createRawText.trim() === "") {
+        throw new Error(
+          `Payment service returned an empty response (HTTP ${createRes.status}). Please verify that Vercel environment variables are configured.`
+        );
+      }
+
+      if (!createContentType.includes("application/json") && (createRawText.startsWith("<") || createRawText.includes("<html"))) {
+        throw new Error(
+          `Payment service returned server error (HTTP ${createRes.status}). Please check server logs.`
+        );
+      }
+
+      try {
+        orderData = JSON.parse(createRawText);
+      } catch {
+        throw new Error(
+          `Payment service returned invalid response (HTTP ${createRes.status}): ${createRawText.substring(0, 100)}`
+        );
+      }
+
+      if (!createRes.ok || !orderData?.success) {
         await refreshLiveStock();
-        throw new Error(orderData.error || "Failed to initialize order payment.");
+        throw new Error(orderData?.error || "Failed to initialize order payment.");
       }
 
       // 3. Launch Razorpay Standard Modal
@@ -310,15 +333,31 @@ export default function CartPage() {
               }),
             });
 
-            const verifyData = await verifyRes.json();
-            if (verifyRes.ok && verifyData.success) {
+            const verifyRawText = await verifyRes.text();
+            let verifyData: any;
+
+            if (!verifyRawText || verifyRawText.trim() === "") {
+              throw new Error(
+                `Verification service returned an empty response (HTTP ${verifyRes.status}).`
+              );
+            }
+
+            try {
+              verifyData = JSON.parse(verifyRawText);
+            } catch {
+              throw new Error(
+                `Verification service returned invalid response (HTTP ${verifyRes.status}).`
+              );
+            }
+
+            if (verifyRes.ok && verifyData?.success) {
               // Redirect to order confirmation page
               router.push(`/orders/${orderData.orderId}?payment=success`);
             } else {
               setPaymentAlert({
                 type: "error",
                 message:
-                  verifyData.error ||
+                  verifyData?.error ||
                   "Payment received, but verification encountered an issue. Please contact NEKARA support.",
               });
               setIsPaymentLoading(false);
