@@ -12,6 +12,7 @@ import { WishlistIcon, CartIcon } from "@/components/ui/Icons";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { ProductCard } from "@/components/products/ProductCard";
 import { cn } from "@/lib/utils";
+import { CONTACT_CONFIG } from "@/lib/contact-config";
 
 interface ProductDetailViewProps {
   product: NekaraProduct;
@@ -542,53 +543,29 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
               )}
 
               {/* WhatsApp Concierge Consultation Link */}
-              <a
-                href={`https://wa.me/919999999999?text=${encodeURIComponent(
-                  `Hello NEKARA, I would like to inquire about the saree: ${product.name} (Ref: ${product.sku || product.id})`
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full h-11 rounded-xs border border-[#075E5A]/50 hover:border-[#075E5A] hover:bg-[#075E5A]/5 text-[#075E5A] font-sans font-medium text-xs tracking-wider uppercase transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-              >
-                <span>Consult Stylist via WhatsApp</span>
-                <span aria-hidden="true">💬</span>
-              </a>
-            </div>
-
-            {/* Trust Assurances */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-4 border-y border-[#B58A45]/20 text-center">
-              <div className="flex flex-col items-center p-2">
-                <span className="text-lg mb-1">🏛️</span>
-                <span className="text-[10px] font-sans font-semibold text-[#241A15] uppercase tracking-wider">
-                  Silk Mark Certified
-                </span>
-                <span className="text-[9px] text-[#3A2115]/65">100% Pure Silks</span>
-              </div>
-              <div className="flex flex-col items-center p-2">
-                <span className="text-lg mb-1">✈️</span>
-                <span className="text-[10px] font-sans font-semibold text-[#241A15] uppercase tracking-wider">
-                  Complimentary Shipping
-                </span>
-                <span className="text-[9px] text-[#3A2115]/65">Insured Across India</span>
-              </div>
-              <div className="flex flex-col items-center p-2">
-                <span className="text-lg mb-1">✨</span>
-                <span className="text-[10px] font-sans font-semibold text-[#241A15] uppercase tracking-wider">
-                  Heirloom Weave
-                </span>
-                <span className="text-[9px] text-[#3A2115]/65">Master Handloom</span>
-              </div>
-              <div className="flex flex-col items-center p-2">
-                <span className="text-lg mb-1">🔒</span>
-                <span className="text-[10px] font-sans font-semibold text-[#241A15] uppercase tracking-wider">
-                  Secure Checkout
-                </span>
-                <span className="text-[9px] text-[#3A2115]/65">Encrypted Payments</span>
-              </div>
+              {CONTACT_CONFIG.isRealWhatsAppConfigured() ? (
+                <a
+                  href={CONTACT_CONFIG.getWhatsAppHref(
+                    `Hello NEKARA, I would like to inquire about the saree: ${product.name} (Ref: ${product.sku || product.id})`
+                  )!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full h-11 rounded-xs border border-[#075E5A]/50 hover:border-[#075E5A] hover:bg-[#075E5A]/5 text-[#075E5A] font-sans font-medium text-xs tracking-wider uppercase transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+                >
+                  <span>Consult Stylist via WhatsApp</span>
+                  <span aria-hidden="true">💬</span>
+                </a>
+              ) : (
+                <div className="w-full py-2.5 px-3 rounded-xs bg-[#FAF6F0] border border-[#B58A45]/20 text-center">
+                  <p className="text-[11px] text-[#3A2115]/75 font-sans">
+                    Concierge Assistance: <span className="font-mono text-[#075E5A] font-semibold">{CONTACT_CONFIG.whatsappNumber}</span>
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Accordion / Tabbed Details */}
-            <div className="mt-8">
+            <div className="mt-6 sm:mt-8">
               {/* Tab Headers */}
               <div className="flex border-b border-[#B58A45]/25 gap-2 overflow-x-auto [scrollbar-width:none]">
                 <button

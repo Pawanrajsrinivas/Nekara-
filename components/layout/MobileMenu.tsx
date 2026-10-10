@@ -11,16 +11,34 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useWishlist } from "@/context/WishlistContext";
 
+import type { NekaraCategory } from "@/types/product";
+import { getCategories } from "@/lib/products";
+
 interface MobileMenuProps {
   isOpen: boolean;
   onClose: () => void;
+  categories?: NekaraCategory[];
 }
 
-export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
+export function MobileMenu({ isOpen, onClose, categories }: MobileMenuProps) {
   const pathname = usePathname();
   const { user, profile, isAuthenticated, logout } = useAuth();
   const { totalItems } = useCart();
   const { wishlistCount } = useWishlist();
+  const [isCategoryExpanded, setIsCategoryExpanded] = React.useState(false);
+  const [categoriesList, setCategoriesList] = React.useState<NekaraCategory[]>(categories || []);
+
+  useEffect(() => {
+    if (categories && categories.length > 0) {
+      setCategoriesList(categories);
+    } else {
+      getCategories()
+        .then((cats) => {
+          if (cats && cats.length > 0) setCategoriesList(cats);
+        })
+        .catch((err) => console.warn("Could not load categories for mobile menu:", err));
+    }
+  }, [categories]);
 
   // Prevent body scrolling when the mobile drawer is open
   useEffect(() => {
@@ -126,6 +144,74 @@ export function MobileMenu({ isOpen, onClose }: MobileMenuProps) {
             <ul className="flex flex-col">
               {MOBILE_PRIMARY_NAV_ITEMS.map((item) => {
                 const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+
+                if (item.label === "Category") {
+                  return (
+                    <li key={item.label} className="border-b border-[#B58A45]/15 last:border-b-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsCategoryExpanded((prev) => !prev)}
+                        className={cn(
+                          "w-full flex items-center justify-between py-2 text-[13px] sm:text-[14px] font-medium uppercase tracking-[0.16em] transition-colors group min-h-[44px] text-left",
+                          isCategoryExpanded || isActive ? "text-[#D4AF37] font-semibold" : "text-[#FAF5ED] hover:text-[#D4AF37]"
+                        )}
+                        aria-expanded={isCategoryExpanded}
+                        aria-label="Expand category menu"
+                      >
+                        <span className="relative">
+                          Category
+                          <span
+                            className={cn(
+                              "absolute -bottom-0.5 left-0 h-[1.5px] bg-[#B58A45] transition-all duration-300",
+                              isCategoryExpanded || isActive ? "w-full" : "w-0 group-hover:w-full"
+                            )}
+                          />
+                        </span>
+                        <ChevronDownIcon
+                          size={14}
+                          className={cn(
+                            "transition-transform duration-200",
+                            isCategoryExpanded ? "rotate-0 text-[#D4AF37]" : "-rotate-90 text-[#FAF5ED]/50"
+                          )}
+                        />
+                      </button>
+
+                      {/* Tap-to-expand Category Submenu */}
+                      {isCategoryExpanded && (
+                        <div className="pl-3.5 pr-1 pb-2 pt-0.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                          <ul className="space-y-1 border-l-2 border-[#B58A45]/30 pl-3">
+                            <li>
+                              <Link
+                                href="/shop"
+                                onClick={onClose}
+                                className="block py-1.5 text-xs uppercase tracking-wider text-[#FAF5ED]/90 hover:text-[#D4AF37] transition-colors"
+                              >
+                                All Sarees
+                              </Link>
+                            </li>
+                            {categoriesList.map((cat) => (
+                              <li key={cat.id}>
+                                <Link
+                                  href={`/shop?category=${encodeURIComponent(cat.slug || cat.name.toLowerCase().replace(/\s+/g, "-"))}`}
+                                  onClick={onClose}
+                                  className="block py-1.5 text-xs uppercase tracking-wider text-[#FAF5ED]/80 hover:text-[#D4AF37] transition-colors"
+                                >
+                                  {cat.name}
+                                </Link>
+                              </li>
+                            ))}
+                            {categoriesList.length === 0 && (
+                              <li className="py-1 text-[11px] text-[#FAF5ED]/40 italic">
+                                Loading categories...
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    </li>
+                  );
+                }
+
                 return (
                   <li key={item.label}>
                     <Link

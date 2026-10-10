@@ -4,12 +4,10 @@ import React, { useEffect, useState, useMemo } from "react";
 import { HeroSlider } from "@/components/home/HeroSlider";
 import { TrustFeatures } from "@/components/home/TrustFeatures";
 import { CategorySection } from "@/components/home/CategorySection";
-import { ShopByStyle } from "@/components/home/ShopByStyle";
 import { DynamicProductSection } from "@/components/home/DynamicProductSection";
 import { BrandStory } from "@/components/home/BrandStory";
 import { CraftsmanshipSection } from "@/components/home/CraftsmanshipSection";
 import { CollectionCta } from "@/components/home/CollectionCta";
-import { JournalSection } from "@/components/home/JournalSection";
 import { NewsletterSection } from "@/components/home/NewsletterSection";
 import { ProductSkeleton } from "@/components/products/ProductSkeleton";
 import { HomeSection, NekaraProduct, NekaraCategory } from "@/types/product";
@@ -57,9 +55,8 @@ export default function HomePage() {
     loadHomepageMerchandising();
   }, []);
 
-  // Filter hero section and optional shopByStyle section
+  // Filter hero section
   const heroSection = sections.find((s) => s.id === "hero") || DEFAULT_STOREFRONT_SECTIONS[0];
-  const shopByStyleSection = sections.find((s) => s.id === "shopByStyle");
 
   // The 3 Core Homepage Sections in exact requested order:
   // 1. New Arrivals: active == true && newArrival == true
@@ -137,16 +134,7 @@ export default function HomePage() {
       {/* 3. Explore by Category (Strictly dynamic from Firestore) */}
       <CategorySection categories={categories} />
 
-      {/* 4. Optional Shop By Style if configured and has categories */}
-      {shopByStyleSection && shopByStyleSection.enabled && (
-        <ShopByStyle
-          title={shopByStyleSection.title}
-          subtitle={shopByStyleSection.subtitle}
-          categoryIds={shopByStyleSection.categoryIds}
-        />
-      )}
-
-      {/* 5. Loading State Skeletons */}
+      {/* 4. Loading State Skeletons */}
       {loading ? (
         <section className="relative w-full bg-[#FAF6F0] py-10 sm:py-16 overflow-hidden border-t border-[#B58A45]/20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -159,7 +147,7 @@ export default function HomePage() {
           </div>
         </section>
       ) : (
-        /* 6. The 3 Core Homepage Sections (New Arrivals, Trending Sarees, Bestsellers) */
+        /* 5. The 3 Core Homepage Sections (New Arrivals, Trending Sarees, Bestsellers) */
         homepageProductSections.map(({ section, products: sectionProducts }) => {
           // Gracefully hide sections that have 0 products matching the criteria
           if (sectionProducts.length === 0) {
@@ -176,19 +164,16 @@ export default function HomePage() {
         })
       )}
 
-      {/* 7. Brand Story & Heritage Lineage */}
+      {/* 6. Brand Story & Heritage Lineage */}
       <BrandStory />
 
-      {/* 8. The Art of the Weave / Craftsmanship */}
+      {/* 7. The Art of the Weave / Craftsmanship */}
       <CraftsmanshipSection />
 
-      {/* 9. Collection Call-to-Action */}
+      {/* 8. Collection Call-to-Action */}
       <CollectionCta />
 
-      {/* 10. From the NEKARA Journal */}
-      <JournalSection />
-
-      {/* 11. Privileged Access / Newsletter */}
+      {/* 9. Privileged Access / Newsletter */}
       <NewsletterSection />
     </div>
   );

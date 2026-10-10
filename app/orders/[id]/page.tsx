@@ -41,6 +41,27 @@ function renderOrderBadges(order: NekaraOrder) {
         Payment Failed
       </span>
     );
+  } else if (payUpper === "REFUNDED") {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-purple-50 text-purple-900 border border-purple-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-purple-700" />
+        Payment Refunded
+      </span>
+    );
+  } else if (payUpper.includes("REFUND PENDING") || payUpper.includes("REFUND PROCESSING")) {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-purple-50/70 text-purple-800 border border-purple-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+        Refund Processing
+      </span>
+    );
+  } else if (payUpper.includes("REFUND FAILED")) {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-rose-100 text-rose-900 border border-rose-300">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-700" />
+        Refund Failed
+      </span>
+    );
   } else {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FAF3E7] text-[#B58A45] border border-[#B58A45]/30">
@@ -378,7 +399,9 @@ export default function OrderDetailPage({ params }: PageProps) {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-[#B58A45]/20 gap-4">
             <div>
               <span className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-[#B58A45] block mb-1">
-                {order.paymentStatus === "Paid" || order.status === "PAID" || order.status === "Confirmed"
+                {order.paymentStatus === "Refunded"
+                  ? "ORDER REFUNDED"
+                  : order.paymentStatus === "Paid" || order.status === "PAID" || order.status === "Confirmed"
                   ? "PURCHASE CONFIRMATION"
                   : order.paymentStatus === "Cancelled" || order.status === "Cancelled"
                   ? "CANCELLED CHECKOUT"
@@ -403,6 +426,29 @@ export default function OrderDetailPage({ params }: PageProps) {
               )}
             </div>
           </div>
+
+          {order.refund && (
+            <div className="mt-6 p-4 rounded-xs bg-purple-50/90 border border-purple-200/80 text-purple-950 font-sans space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-purple-900">
+                  Refund Processed ({formatINR(order.refund.amount)})
+                </span>
+                <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded-sm">
+                  {order.refund.refundId}
+                </span>
+              </div>
+              <p className="text-xs text-purple-900/80 leading-relaxed">
+                {order.refund.method === "razorpay"
+                  ? "Your refund has been initiated back to your original source payment method and will reflect within 5 to 7 business days per bank processing timelines."
+                  : `Your refund of ${formatINR(order.refund.amount)} has been recorded via manual banking settlement. Reference: ${order.refund.referenceId || "Direct Account Transfer"}.`}
+              </p>
+              {order.refund.reason && (
+                <p className="text-[11px] text-purple-800/70 italic">
+                  Reason: {order.refund.reason}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Purchased Items List */}
           <div id="order-items" className="py-6 border-b border-[#B58A45]/20 space-y-4 scroll-mt-24">

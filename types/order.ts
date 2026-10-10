@@ -9,7 +9,27 @@ export type OrderStatus =
   | "Failed"
   | "Refunded";
 
-export type PaymentStatus = "Pending" | "Paid" | "Failed" | "Cancelled" | "Refunded";
+export type PaymentStatus =
+  | "Pending"
+  | "Paid"
+  | "Failed"
+  | "Cancelled"
+  | "Refund Pending"
+  | "Refund Processing"
+  | "Refunded"
+  | "Refund Failed";
+
+export interface OrderRefundInfo {
+  refundId?: string;
+  amount: number;
+  reason?: string;
+  status: "pending" | "processing" | "processed" | "failed";
+  method: "razorpay" | "manual";
+  notes?: string;
+  refundedAt?: any;
+  createdAt?: any;
+  referenceId?: string;
+}
 
 export interface OrderItem {
   productId: string;
@@ -82,6 +102,7 @@ export interface NekaraOrder {
   paymentProcessingFeeGST?: number;
   shippingFee?: number;
   shippingAddress?: ShippingAddress;
+  refund?: OrderRefundInfo;
   notes?: string;
   hiddenFromCustomer?: boolean;
   deletedAt?: any;

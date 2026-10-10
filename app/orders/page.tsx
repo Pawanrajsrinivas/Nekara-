@@ -41,6 +41,27 @@ function renderOrderBadges(order: NekaraOrder) {
         Payment Failed
       </span>
     );
+  } else if (payUpper === "REFUNDED") {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-purple-50 text-purple-900 border border-purple-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-purple-700" />
+        Refunded
+      </span>
+    );
+  } else if (payUpper.includes("REFUND PENDING") || payUpper.includes("REFUND PROCESSING")) {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-purple-50/70 text-purple-800 border border-purple-200">
+        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+        Refund Processing
+      </span>
+    );
+  } else if (payUpper.includes("REFUND FAILED")) {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-rose-100 text-rose-900 border border-rose-300">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-700" />
+        Refund Failed
+      </span>
+    );
   } else {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FAF3E7] text-[#B58A45] border border-[#B58A45]/30">
