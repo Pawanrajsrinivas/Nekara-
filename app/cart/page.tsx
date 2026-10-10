@@ -1016,7 +1016,7 @@ export default function CartPage() {
                       )
                     ) : (
                       <span className="text-[11px] text-[#3A2115]/50 italic">
-                        Enter 6-digit PIN code
+                        Fill the the checkout for Delivery Fee
                       </span>
                     )}
                   </div>
