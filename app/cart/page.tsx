@@ -56,9 +56,6 @@ export default function CartPage() {
     refreshLiveStock,
   } = useCart();
 
-  // Authoritative payment fee calculation for customer preview
-  const breakdown = calculatePaymentBreakdown(totalAmount);
-
   // Checkout UI step state
   const [isCheckoutStep, setIsCheckoutStep] = useState<boolean>(false);
   const [isPaymentLoading, setIsPaymentLoading] = useState<boolean>(false);
@@ -80,6 +77,59 @@ export default function CartPage() {
     state: "Karnataka",
     postalCode: "",
   });
+
+  // Dynamic Shipping Rate state
+  const [shippingFee, setShippingFee] = useState<number>(0);
+  const [isCalculatingShipping, setIsCalculatingShipping] = useState<boolean>(false);
+  const [shippingQuoteInfo, setShippingQuoteInfo] = useState<{
+    quoteSource?: string;
+    message?: string;
+  } | null>(null);
+
+  // Authoritative payment fee calculation for customer preview with shipping fee
+  const breakdown = calculatePaymentBreakdown(totalAmount, undefined, shippingFee);
+
+  // Auto-fetch shipping rate whenever 6-digit PIN code is entered
+  useEffect(() => {
+    const cleanPin = shippingAddress.postalCode.replace(/\D/g, "");
+    if (cleanPin.length === 6) {
+      let isMounted = true;
+      setIsCalculatingShipping(true);
+      fetch("/api/get-shipping-rate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          postalCode: cleanPin,
+          quantity: totalItems || 1,
+          subtotal: totalAmount,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (!isMounted) return;
+          setIsCalculatingShipping(false);
+          if (data && data.success && typeof data.shippingFee === "number") {
+            setShippingFee(data.shippingFee);
+            setShippingQuoteInfo({
+              quoteSource: data.quoteSource,
+              message: data.message,
+            });
+          }
+        })
+        .catch((err) => {
+          if (!isMounted) return;
+          setIsCalculatingShipping(false);
+          console.warn("[CHECKOUT SHIPPING RATE ERROR]:", err);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setShippingFee(0);
+      setShippingQuoteInfo(null);
+    }
+  }, [shippingAddress.postalCode, totalItems, totalAmount]);
 
   // Pre-fill customer details from profile / auth when available
   useEffect(() => {
@@ -886,11 +936,31 @@ export default function CartPage() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between">
-                    <span>Insured Delivery</span>
-                    <span className="text-[#075E5A] font-medium">
-                      Complimentary
-                    </span>
+                  <div className="flex items-center justify-between text-xs text-[#3A2115]/80">
+                    <div className="flex flex-col">
+                      <span>Insured Delivery</span>
+                      {shippingQuoteInfo?.message && (
+                        <span className="text-[10px] text-[#3A2115]/50">
+                          {shippingQuoteInfo.message}
+                        </span>
+                      )}
+                    </div>
+                    {isCalculatingShipping ? (
+                      <span className="text-[11px] text-[#B58A45] flex items-center gap-1">
+                        <span className="w-2.5 h-2.5 border border-[#B58A45] border-t-transparent rounded-full animate-spin inline-block" />
+                        Calculating...
+                      </span>
+                    ) : shippingFee > 0 ? (
+                      <span className="font-medium text-[#241A15]">
+                        {formatINR(shippingFee)}
+                      </span>
+                    ) : shippingAddress.postalCode.length === 6 ? (
+                      <span className="text-[#075E5A] font-medium">Complimentary</span>
+                    ) : (
+                      <span className="text-[11px] text-[#3A2115]/50 italic">
+                        Enter 6-digit PIN code
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-[#3A2115]/60">

@@ -11,52 +11,72 @@ export function TrustFeatures() {
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case "lotus":
-        return <LotusMotifIcon size={36} className="text-[#B58A45] shrink-0 sm:w-10 sm:h-10" />;
+        return <LotusMotifIcon size={24} className="text-[#B58A45] shrink-0 sm:w-6 sm:h-6" />;
       case "weave":
-        return <LoomWeaveIcon size={36} className="text-[#B58A45] shrink-0 sm:w-10 sm:h-10" />;
+        return <LoomWeaveIcon size={24} className="text-[#B58A45] shrink-0 sm:w-6 sm:h-6" />;
       case "diamond":
-        return <DiamondCraftIcon size={36} className="text-[#B58A45] shrink-0 sm:w-10 sm:h-10" />;
+        return <DiamondCraftIcon size={24} className="text-[#B58A45] shrink-0 sm:w-6 sm:h-6" />;
       case "delivery":
-        return <DeliveryTruckIcon size={36} className="text-[#B58A45] shrink-0 sm:w-10 sm:h-10" />;
+        return <DeliveryTruckIcon size={24} className="text-[#B58A45] shrink-0 sm:w-6 sm:h-6" />;
       default:
-        return <LotusMotifIcon size={36} className="text-[#B58A45] shrink-0 sm:w-10 sm:h-10" />;
+        return <LotusMotifIcon size={24} className="text-[#B58A45] shrink-0 sm:w-6 sm:h-6" />;
     }
   };
+
+  // Render a single sequence of trust feature pills
+  const renderSequence = (keyPrefix: string) => (
+    <div key={keyPrefix} className="flex items-center gap-8 sm:gap-12 lg:gap-16 pr-8 sm:pr-12 lg:pr-16 shrink-0">
+      {TRUST_FEATURES.map((feature) => (
+        <div
+          key={`${keyPrefix}-${feature.id}`}
+          className="flex items-center gap-3 shrink-0 py-1"
+        >
+          {/* Feature Icon */}
+          <div className="shrink-0 p-1.5 rounded-full bg-[#B58A45]/10 border border-[#B58A45]/20">
+            {getIcon(feature.iconName)}
+          </div>
+
+          {/* Feature Text */}
+          <div className="flex flex-col text-left whitespace-nowrap">
+            <span className="font-serif text-[13px] sm:text-[14px] font-semibold text-[#02221D] leading-tight tracking-wide">
+              {feature.title}
+            </span>
+            {feature.subtitle && (
+              <span className="text-[10px] sm:text-[11px] text-[#3A2115]/65 font-sans tracking-normal mt-0.5">
+                {feature.subtitle}
+              </span>
+            )}
+          </div>
+
+          {/* Subtle separator dot */}
+          <span className="ml-6 sm:ml-10 text-[#B58A45]/40 text-xs select-none" aria-hidden="true">
+            ✦
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <section
       aria-label="Brand Guarantees and Trust Features"
-      className="relative w-full bg-[#FAF3E7] border-y border-[#B58A45]/25 py-5 sm:py-7 lg:py-8"
+      className="relative w-full bg-[#FAF3E7] border-y border-[#B58A45]/25 py-2.5 sm:py-3 overflow-hidden select-none"
       style={{
-        backgroundImage: `radial-gradient(circle at 50% 50%, rgba(181, 138, 69, 0.04) 0%, transparent 80%)`,
+        backgroundImage: `radial-gradient(circle at 50% 50%, rgba(181, 138, 69, 0.05) 0%, transparent 80%)`,
       }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* 4 columns on desktop, clean balanced 2x2 grid on mobile/tablet */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-y-5 gap-x-3 sm:gap-x-6 lg:gap-x-8">
-          {TRUST_FEATURES.map((feature) => (
-            <div
-              key={feature.id}
-              className="flex items-center justify-start sm:justify-center gap-2.5 sm:gap-4 group transition-transform duration-300 hover:-translate-y-0.5"
-            >
-              {/* Feature Icon */}
-              <div className="transition-transform duration-300 group-hover:scale-105 shrink-0">
-                {getIcon(feature.iconName)}
-              </div>
+      {/* Outer container with soft gradient edge masks */}
+      <div className="relative w-full overflow-hidden">
+        {/* Left and Right edge fade masks for smooth entry/exit */}
+        <div className="absolute left-0 top-0 bottom-0 w-8 sm:w-16 bg-gradient-to-r from-[#FAF3E7] to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-8 sm:w-16 bg-gradient-to-l from-[#FAF3E7] to-transparent z-10 pointer-events-none" />
 
-              {/* Feature Text */}
-              <div className="flex flex-col text-left min-w-0">
-                <h3 className="font-serif text-[13px] sm:text-[15px] lg:text-[16px] font-semibold text-[#3A2115] leading-snug tracking-wide group-hover:text-[#075E5A] transition-colors truncate sm:whitespace-normal">
-                  {feature.title}
-                </h3>
-                {feature.subtitle && (
-                  <span className="text-[10px] sm:text-xs text-[#3A2115]/65 font-sans tracking-normal mt-0.5 truncate sm:whitespace-normal">
-                    {feature.subtitle}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+        {/* CSS Marquee continuous moving row */}
+        <div className="animate-marquee flex items-center">
+          {renderSequence("seq1")}
+          {renderSequence("seq2")}
+          {renderSequence("seq3")}
+          {renderSequence("seq4")}
         </div>
       </div>
     </section>

@@ -26,8 +26,8 @@ const HERO_SLIDES: HeroSlide[] = [
     subtitle: "THE HEIRLOOM EDITION",
     title: "HERITAGE\nIN EVERY THREAD",
     description: "Timeless Sarees. Modern Elegance.",
-    ctaText: "VIEW COLLECTION →",
-    ctaLink: "/collections",
+    ctaText: "VIEW CATEGORY →",
+    ctaLink: "/#categories",
     mobileObjectPosition: "object-[75%_center] sm:object-[72%_center] md:object-center",
   },
   {

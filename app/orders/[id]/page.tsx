@@ -500,47 +500,103 @@ export default function OrderDetailPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Financial & Delivery Details 2-Column Grid */}
+          {/* Financial & Delivery Details Grid */}
           <div className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Shipping Address */}
-            <div className="space-y-3">
-              <h4 className="font-serif text-sm font-semibold uppercase tracking-wider text-[#241A15]">
-                Delivery Information
-              </h4>
+            {/* Delivery Information & Tracking */}
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <h4 className="font-serif text-sm font-semibold uppercase tracking-wider text-[#241A15]">
+                  Delivery Information
+                </h4>
 
-              {order.shippingAddress ? (
-                <div className="p-4 bg-[#FAF6F0] rounded-xs border border-[#B58A45]/20 text-xs text-[#3A2115]/80 space-y-1 font-sans">
-                  {order.shippingAddress.name && (
-                    <p className="font-semibold text-[#241A15]">
-                      {order.shippingAddress.name}
+                {order.shippingAddress ? (
+                  <div className="p-4 bg-[#FAF6F0] rounded-xs border border-[#B58A45]/20 text-xs text-[#3A2115]/80 space-y-1 font-sans">
+                    {order.shippingAddress.name && (
+                      <p className="font-semibold text-[#241A15]">
+                        {order.shippingAddress.name}
+                      </p>
+                    )}
+                    {order.shippingAddress.phone && (
+                      <p>Phone: {order.shippingAddress.phone}</p>
+                    )}
+                    {order.shippingAddress.street || order.shippingAddress.address ? (
+                      <p>{order.shippingAddress.street || order.shippingAddress.address}</p>
+                    ) : null}
+                    {(order.shippingAddress.city || order.shippingAddress.state) && (
+                      <p>
+                        {[order.shippingAddress.city, order.shippingAddress.state]
+                          .filter(Boolean)
+                          .join(", ")}
+                        {order.shippingAddress.postalCode || order.shippingAddress.pincode
+                          ? ` - ${
+                              order.shippingAddress.postalCode ||
+                              order.shippingAddress.pincode
+                            }`
+                          : ""}
+                      </p>
+                    )}
+                    {order.shippingAddress.country && (
+                      <p>{order.shippingAddress.country}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-4 bg-[#FAF6F0] rounded-xs border border-[#B58A45]/20 text-xs text-[#3A2115]/60 font-sans">
+                    Standard Handloom Delivery
+                  </div>
+                )}
+              </div>
+
+              {/* Delivery Partner & Tracking Section (If Dispatched) */}
+              {order.shipment?.trackingId && (
+                <div className="p-4 bg-[#EBF5EE]/80 rounded-xs border border-[#C2E3CD] text-xs font-sans space-y-2 text-[#064238]">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold uppercase tracking-wider text-[11px] text-[#064238]">
+                      🚚 Live Parcel Tracking
+                    </span>
+                    <span className="font-semibold px-2 py-0.5 rounded-full bg-[#064238] text-white text-[10px]">
+                      {order.shipment.carrier}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[#3A2115]/75">AWB / Tracking Number:</span>
+                    <span className="font-mono font-bold text-[#02221D]">
+                      {order.shipment.trackingId}
+                    </span>
+                  </div>
+
+                  {order.shipment.dispatchedAt && (
+                    <div className="flex items-center justify-between text-[11px] text-[#3A2115]/70">
+                      <span>Dispatched On:</span>
+                      <span>{formatDetailDate(order.shipment.dispatchedAt)}</span>
+                    </div>
+                  )}
+
+                  {order.shipment.carrierPhone && (
+                    <div className="flex items-center justify-between text-[11px] text-[#3A2115]/70">
+                      <span>Delivery Support:</span>
+                      <span>{order.shipment.carrierPhone}</span>
+                    </div>
+                  )}
+
+                  {order.shipment.notes && (
+                    <p className="text-[11px] text-[#064238]/80 italic pt-1 border-t border-[#C2E3CD]">
+                      Note: {order.shipment.notes}
                     </p>
                   )}
-                  {order.shippingAddress.phone && (
-                    <p>Phone: {order.shippingAddress.phone}</p>
+
+                  {order.shipment.trackingUrl && (
+                    <div className="pt-2">
+                      <a
+                        href={order.shipment.trackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center w-full py-2 px-3 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-semibold text-xs tracking-wider uppercase transition-colors"
+                      >
+                        Track Shipment on {order.shipment.carrier} →
+                      </a>
+                    </div>
                   )}
-                  {order.shippingAddress.street || order.shippingAddress.address ? (
-                    <p>{order.shippingAddress.street || order.shippingAddress.address}</p>
-                  ) : null}
-                  {(order.shippingAddress.city || order.shippingAddress.state) && (
-                    <p>
-                      {[order.shippingAddress.city, order.shippingAddress.state]
-                        .filter(Boolean)
-                        .join(", ")}
-                      {order.shippingAddress.postalCode || order.shippingAddress.pincode
-                        ? ` - ${
-                            order.shippingAddress.postalCode ||
-                            order.shippingAddress.pincode
-                          }`
-                        : ""}
-                    </p>
-                  )}
-                  {order.shippingAddress.country && (
-                    <p>{order.shippingAddress.country}</p>
-                  )}
-                </div>
-              ) : (
-                <div className="p-4 bg-[#FAF6F0] rounded-xs border border-[#B58A45]/20 text-xs text-[#3A2115]/60 font-sans">
-                  Standard Complimentary Handloom Delivery
                 </div>
               )}
             </div>
@@ -563,8 +619,12 @@ export default function OrderDetailPage({ params }: PageProps) {
                   </div>
                 )}
                 <div className="flex justify-between text-[#3A2115]/70">
-                  <span>Complimentary Shipping</span>
-                  <span className="text-[#075E5A] font-medium">FREE</span>
+                  <span>Insured Delivery</span>
+                  {typeof order.shippingFee === "number" && order.shippingFee > 0 ? (
+                    <span className="font-medium text-[#241A15]">{formatINR(order.shippingFee)}</span>
+                  ) : (
+                    <span className="text-[#075E5A] font-medium">Complimentary</span>
+                  )}
                 </div>
                 <div className="pt-2 border-t border-[#B58A45]/20 flex justify-between font-serif text-base font-bold text-[#02221D]">
                   <span>

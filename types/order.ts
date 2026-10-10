@@ -103,6 +103,8 @@ export interface NekaraOrder {
   shippingFee?: number;
   shippingAddress?: ShippingAddress;
   refund?: OrderRefundInfo;
+  shipment?: OrderShipmentInfo;
+  shippingQuote?: ShippingQuoteSnapshot;
   notes?: string;
   hiddenFromCustomer?: boolean;
   deletedAt?: any;
@@ -110,4 +112,33 @@ export interface NekaraOrder {
   paidAt?: any;
   createdAt?: any;
   updatedAt?: any;
+}
+
+export interface OrderShipmentInfo {
+  carrier: "Delhivery" | "Blue Dart" | "Shadowfax" | "DTDC" | "Ekart" | "XpressBees" | "Other";
+  customCarrierName?: string;
+  trackingId: string;
+  trackingUrl?: string;
+  carrierPhone?: string;
+  dispatchedAt?: any;
+  notes?: string;
+  status: "Manifested" | "In Transit" | "Out for Delivery" | "Delivered" | "RTO" | "Pending";
+  updatedAt?: any;
+  updatedBy?: string;
+}
+
+export interface ShippingQuoteSnapshot {
+  destinationPincode: string;
+  originPincode: string;
+  shippingMode: "S" | "E";
+  quotedAmount: number;
+  quoteSource: "delhivery" | "configured_fallback";
+  quotedAt: any;
+  chargeableWeightGrams: number;
+  dimensionsCm: {
+    length: number;
+    breadth: number;
+    height: number;
+  };
+  providerReference?: string;
 }

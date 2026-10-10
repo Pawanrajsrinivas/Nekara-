@@ -4,6 +4,7 @@ import { getAdminDb, isFirebaseAdminConfigured, FieldValue } from "@/lib/firebas
 import { OrderItem, ShippingAddress } from "@/types/order";
 import { sanitizeFirestoreData } from "@/lib/orders-server";
 import { calculatePaymentBreakdown } from "@/lib/pricing-config";
+import { calculateShippingRate, ShippingRateCalculationResult } from "@/lib/shipping-rate-engine";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -207,9 +208,36 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Authoritative Server-side Additive Calculation (2% Processing Fee + 18% GST on Fee)
+    // Authoritative Server-side Shipping Rate Calculation
+    const destinationPin = (
+      shippingAddress.postalCode ||
+      shippingAddress.pincode ||
+      ""
+    ).replace(/\D/g, "");
+
+    const totalQuantity = enrichedItems.reduce((acc, curr) => acc + (curr.quantity || 1), 0);
+
+    let shippingRateResult: ShippingRateCalculationResult | null = null;
+    let authoritativeShippingFee = 0;
+
+    if (destinationPin.length === 6) {
+      try {
+        shippingRateResult = await calculateShippingRate({
+          destinationPincode: destinationPin,
+          totalQuantity,
+          orderSubtotal: serverTotalAmount,
+        });
+        if (shippingRateResult && typeof shippingRateResult.shippingFee === "number") {
+          authoritativeShippingFee = shippingRateResult.shippingFee;
+        }
+      } catch (shipErr: any) {
+        console.warn("[CREATE ORDER] Shipping calculation fallback:", shipErr?.message || shipErr);
+      }
+    }
+
+    // Authoritative Server-side Additive Calculation (2% Fee + 18% GST + Shipping)
     const serverSubtotal = serverTotalAmount;
-    const breakdown = calculatePaymentBreakdown(serverSubtotal);
+    const breakdown = calculatePaymentBreakdown(serverSubtotal, undefined, authoritativeShippingFee);
 
     // Razorpay amount in paise (1 INR = 100 paise). Minimum 100 paise (₹1).
     const amountInPaise = breakdown.amountInPaise;
@@ -285,6 +313,7 @@ export async function POST(req: NextRequest) {
         processingFee: String(breakdown.processingFee),
         processingFeeBase: String(breakdown.processingFeeBase),
         processingFeeGST: String(breakdown.processingFeeGST),
+        shippingFee: String(authoritativeShippingFee),
       },
     });
 
@@ -319,7 +348,20 @@ export async function POST(req: NextRequest) {
       paymentProcessingFee: breakdown.processingFee,
       paymentProcessingFeeBase: breakdown.processingFeeBase,
       paymentProcessingFeeGST: breakdown.processingFeeGST,
-      shippingFee: 0,
+      shippingFee: authoritativeShippingFee,
+      shippingQuote: shippingRateResult
+        ? {
+            serviceable: shippingRateResult.serviceable,
+            shippingFee: shippingRateResult.shippingFee,
+            originPincode: shippingRateResult.originPincode,
+            destinationPincode: shippingRateResult.destinationPincode,
+            shippingMode: shippingRateResult.shippingMode,
+            chargeableWeightGrams: shippingRateResult.chargeableWeightGrams,
+            dimensionsCm: shippingRateResult.dimensionsCm,
+            quoteSource: shippingRateResult.quoteSource,
+            providerReference: shippingRateResult.providerReference || null,
+          }
+        : null,
       shippingAddress: {
         ...shippingAddress,
         fullName: customerFullName,
@@ -364,7 +406,9 @@ export async function POST(req: NextRequest) {
       paymentProcessingFee: breakdown.processingFee,
       paymentProcessingFeeBase: breakdown.processingFeeBase,
       paymentProcessingFeeGST: breakdown.processingFeeGST,
+      shippingFee: authoritativeShippingFee,
       totalAmount: breakdown.totalAmount,
+      shippingQuote: orderData.shippingQuote,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID?.trim() || rawKeyId,
     });
   } catch (err: any) {

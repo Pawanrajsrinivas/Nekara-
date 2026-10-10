@@ -37,6 +37,7 @@ export interface PaymentBreakdown {
   processingFeeBase: number;
   processingFeeGST: number;
   processingFee: number;
+  shippingFee: number;
   totalAmount: number;
   amountInPaise: number;
   effectiveRatePercent: number;
@@ -44,19 +45,23 @@ export interface PaymentBreakdown {
 
 export function calculatePaymentBreakdown(
   subtotal: number,
-  config: PaymentFeeConfig = DEFAULT_PAYMENT_FEE_CONFIG
+  config: PaymentFeeConfig = DEFAULT_PAYMENT_FEE_CONFIG,
+  shippingFee: number = 0
 ): PaymentBreakdown {
   const cleanSubtotal = Math.max(0, typeof subtotal === "number" && !isNaN(subtotal) ? subtotal : 0);
+  const cleanShippingFee = Math.max(0, typeof shippingFee === "number" && !isNaN(shippingFee) ? shippingFee : 0);
 
   if (!config.enabled || cleanSubtotal <= 0) {
-    const subtotalInPaise = Math.round(cleanSubtotal * 100);
+    const totalWithShipping = cleanSubtotal + cleanShippingFee;
+    const totalInPaise = Math.round(totalWithShipping * 100);
     return {
       subtotal: cleanSubtotal,
       processingFeeBase: 0,
       processingFeeGST: 0,
       processingFee: 0,
-      totalAmount: cleanSubtotal,
-      amountInPaise: subtotalInPaise,
+      shippingFee: cleanShippingFee,
+      totalAmount: totalWithShipping,
+      amountInPaise: totalInPaise,
       effectiveRatePercent: 0,
     };
   }
@@ -73,8 +78,11 @@ export function calculatePaymentBreakdown(
   // 3. Total payment processing fee
   const totalProcessingFeeInPaise = processingFeeBaseInPaise + processingFeeGSTInPaise;
 
-  // 4. Customer grand total
-  const totalAmountInPaise = subtotalInPaise + totalProcessingFeeInPaise;
+  // 4. Shipping fee in paise
+  const shippingFeeInPaise = Math.round(cleanShippingFee * 100);
+
+  // 5. Customer grand total (Subtotal + Gateway Fee + Delivery)
+  const totalAmountInPaise = subtotalInPaise + totalProcessingFeeInPaise + shippingFeeInPaise;
 
   const processingFeeBase = processingFeeBaseInPaise / 100;
   const processingFeeGST = processingFeeGSTInPaise / 100;
@@ -86,6 +94,7 @@ export function calculatePaymentBreakdown(
     processingFeeBase,
     processingFeeGST,
     processingFee,
+    shippingFee: cleanShippingFee,
     totalAmount,
     amountInPaise: totalAmountInPaise,
     effectiveRatePercent: 2.36,
