@@ -11,51 +11,48 @@ import { NekaraOrder, OrderStatus } from "@/types/order";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { OrdersIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
+import { resolveOrderStatuses } from "@/lib/order-status";
 
 function renderOrderBadges(order: NekaraOrder) {
-  const payUpper = (
-    order.paymentStatus ||
-    (order.status === "PAID" ? "Paid" : order.status === "Cancelled" ? "Cancelled" : order.status === "Failed" ? "Failed" : "Pending")
-  ).toUpperCase();
-  const orderUpper = (order.orderStatus || order.status || "Pending").toUpperCase();
+  const statusInfo = resolveOrderStatuses(order);
 
   let paymentBadge = null;
-  if (payUpper === "PAID") {
+  if (statusInfo.primaryPaymentBadgeVariant === "paid") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#EBF5EE] text-[#064238] border border-[#C2E3CD]">
         <span className="w-1.5 h-1.5 rounded-full bg-[#064238]" />
         Payment Paid
       </span>
     );
-  } else if (payUpper === "CANCELLED") {
+  } else if (statusInfo.primaryPaymentBadgeVariant === "cancelled") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FAF6F0] text-[#786D5F] border border-[#D9CDBB]">
         <span className="w-1.5 h-1.5 rounded-full bg-[#786D5F]" />
         Payment Cancelled
       </span>
     );
-  } else if (payUpper === "FAILED") {
+  } else if (statusInfo.primaryPaymentBadgeVariant === "failed") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]">
         <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
         Payment Failed
       </span>
     );
-  } else if (payUpper === "REFUNDED") {
+  } else if (statusInfo.primaryPaymentBadgeVariant === "refunded") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-purple-50 text-purple-900 border border-purple-200">
         <span className="w-1.5 h-1.5 rounded-full bg-purple-700" />
         Refunded
       </span>
     );
-  } else if (payUpper.includes("REFUND PENDING") || payUpper.includes("REFUND PROCESSING")) {
+  } else if (statusInfo.primaryPaymentBadgeVariant === "refund_pending") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-purple-50/70 text-purple-800 border border-purple-200">
         <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
         Refund Processing
       </span>
     );
-  } else if (payUpper.includes("REFUND FAILED")) {
+  } else if (statusInfo.primaryPaymentBadgeVariant === "refund_failed") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-rose-100 text-rose-900 border border-rose-300">
         <span className="w-1.5 h-1.5 rounded-full bg-rose-700" />
@@ -72,22 +69,22 @@ function renderOrderBadges(order: NekaraOrder) {
   }
 
   let orderBadge = null;
-  if (orderUpper === "DELIVERED") {
+  if (statusInfo.fulfillmentBadgeVariant === "delivered") {
     orderBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#EBF5EE] text-[#064238] border border-[#C2E3CD]">
         Delivered
       </span>
     );
-  } else if (orderUpper === "SHIPPED") {
+  } else if (statusInfo.fulfillmentBadgeVariant === "shipped") {
     orderBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
         Shipped
       </span>
     );
-  } else if (orderUpper === "CONFIRMED" || orderUpper === "PROCESSING") {
+  } else if (statusInfo.fulfillmentBadgeVariant === "confirmed" || statusInfo.fulfillmentBadgeVariant === "processing") {
     orderBadge = (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-sans font-semibold bg-[#02221D]/10 text-[#02221D] border border-[#02221D]/20">
-        Confirmed
+        {statusInfo.fulfillmentBadgeText}
       </span>
     );
   }
@@ -133,7 +130,8 @@ export default function MyOrdersPage() {
   const [orders, setOrders] = useState<NekaraOrder[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
+  const [orderToHide, setOrderToHide] = useState<string | null>(null);
+  const [hideConfirmStep, setHideConfirmStep] = useState<0 | 1 | 2>(0);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   // Protect private orders page
@@ -159,7 +157,7 @@ export default function MyOrdersPage() {
     }
   }, [user]);
 
-  const handleRemoveOrder = async (targetOrderId: string) => {
+  const handleHideOrder = async (targetOrderId: string) => {
     if (!user) return;
 
     try {
@@ -176,13 +174,15 @@ export default function MyOrdersPage() {
 
       const data = await res.json();
       if (!res.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to remove order.");
+        throw new Error(data?.error || "Failed to hide order.");
       }
 
       setOrders((prev) => prev.filter((o) => o.id !== targetOrderId));
-      setOrderToDelete(null);
+      setOrderToHide(null);
+      setHideConfirmStep(0);
     } catch (err: any) {
-      alert(err.message || "Failed to remove order.");
+      alert(err.message || "Failed to hide order.");
+      setHideConfirmStep(0);
     } finally {
       setIsDeleting(false);
     }
@@ -315,6 +315,8 @@ export default function MyOrdersPage() {
                   ? order.id
                   : `NK-${order.id.slice(-6).toUpperCase()}`;
 
+              const statusInfo = resolveOrderStatuses(order);
+
               return (
                 <div
                   key={order.id}
@@ -397,26 +399,24 @@ export default function MyOrdersPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5">
-                      {(order.paymentStatus === "Cancelled" ||
-                        order.paymentStatus === "Failed" ||
-                        order.status === "Cancelled" ||
-                        order.status === "Failed") && (
-                        <>
-                          <Link
-                            href={`/payment-failed?orderId=${order.id}&status=${(order.paymentStatus || order.status).toLowerCase()}`}
-                            className="inline-flex items-center justify-center px-4 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs min-h-[40px]"
-                          >
-                            Retry Payment
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => setOrderToDelete(order.id)}
-                            className="inline-flex items-center justify-center px-4 py-2 rounded-xs border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 font-sans font-semibold text-xs tracking-wider uppercase transition-all min-h-[40px]"
-                          >
-                            Remove Order
-                          </button>
-                        </>
+                      {!statusInfo.isRefunded && (statusInfo.isCancelled || statusInfo.isFailed) && (
+                        <Link
+                          href={`/payment-failed?orderId=${order.id}&status=${statusInfo.isCancelled ? "cancelled" : "failed"}`}
+                          className="inline-flex items-center justify-center px-4 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs min-h-[40px]"
+                        >
+                          Retry Payment
+                        </Link>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOrderToHide(order.id);
+                          setHideConfirmStep(1);
+                        }}
+                        className="inline-flex items-center justify-center px-4 py-2 rounded-xs border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 font-sans font-semibold text-xs tracking-wider uppercase transition-all min-h-[40px]"
+                      >
+                        Hide Order
+                      </button>
                       <Link
                         href={`/orders/${order.id}`}
                         className="inline-flex items-center justify-center px-5 py-2 rounded-xs border border-[#B58A45]/40 hover:border-[#075E5A] hover:bg-[#075E5A] text-[#02221D] hover:text-[#FAF5ED] font-sans font-semibold text-xs tracking-wider uppercase transition-all shadow-xs min-h-[40px]"
@@ -432,32 +432,73 @@ export default function MyOrdersPage() {
         )}
       </div>
 
-      {/* Soft-Delete Confirmation Dialog Modal */}
-      {orderToDelete && (
+      {/* 2-Step Confirmation Modal for Hiding Order */}
+      {hideConfirmStep === 1 && orderToHide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-[#FFFBF5] border border-[#B58A45]/30 rounded-xs p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <span className="text-[10px] font-sans font-semibold tracking-widest uppercase text-rose-800 block">
+              Step 1 of 2 — Confirmation
+            </span>
             <h3 className="font-serif text-lg font-bold text-[#02221D]">
-              Remove this order?
+              Hide this order from your view?
             </h3>
             <p className="text-xs sm:text-sm text-[#3A2115]/75 font-sans leading-relaxed">
-              Are you sure you want to remove this cancelled payment order? This will remove the uncompleted order from your purchase history.
+              This will remove this order from your personal purchase history on the customer portal. It will not cancel any live delivery or delete administrative records.
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                disabled={isDeleting}
-                onClick={() => setOrderToDelete(null)}
-                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
+                onClick={() => {
+                  setHideConfirmStep(0);
+                  setOrderToHide(null);
+                }}
+                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                onClick={() => setHideConfirmStep(2)}
+                className="px-4 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs uppercase tracking-wider transition-colors"
+              >
+                Proceed to Final Confirmation →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hideConfirmStep === 2 && orderToHide && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-[#FFFBF5] border border-rose-300 rounded-xs p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <span className="text-[10px] font-sans font-semibold tracking-widest uppercase text-rose-800 block">
+              Step 2 of 2 — Final Decision
+            </span>
+            <h3 className="font-serif text-lg font-bold text-rose-900">
+              Confirm Hiding Order
+            </h3>
+            <p className="text-xs sm:text-sm text-[#3A2115]/75 font-sans leading-relaxed">
+              Are you completely sure? Once hidden, this order cannot be retrieved from your customer account page.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
                 disabled={isDeleting}
-                onClick={() => handleRemoveOrder(orderToDelete)}
+                onClick={() => {
+                  setHideConfirmStep(0);
+                  setOrderToHide(null);
+                }}
+                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleHideOrder(orderToHide)}
                 className="px-4 py-2 rounded-xs bg-rose-700 hover:bg-rose-800 text-white font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                {isDeleting ? "Removing..." : "Remove Order"}
+                {isDeleting ? "Hiding..." : "Yes, Hide Order"}
               </button>
             </div>
           </div>

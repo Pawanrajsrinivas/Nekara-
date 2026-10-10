@@ -402,47 +402,18 @@ export async function softDeleteCustomerOrder(
       return { success: false, error: "Unauthorized: You do not own this order." };
     }
 
-    // Protection check: Never allow deleting paid, confirmed, or fulfilled orders
-    const paymentStatusUpper = (data?.paymentStatus || "").toUpperCase();
-    const statusUpper = (data?.status || "").toUpperCase();
-
-    if (
-      paymentStatusUpper === "PAID" ||
-      statusUpper === "PAID" ||
-      statusUpper === "CONFIRMED" ||
-      statusUpper === "PROCESSING" ||
-      statusUpper === "SHIPPED" ||
-      statusUpper === "DELIVERED"
-    ) {
-      return {
-        success: false,
-        error: "Completed purchases cannot be removed. Only cancelled or failed orders can be removed.",
-      };
-    }
-
-    // Eligibility check: strictly cancelled or failed
-    const isCancelled =
-      paymentStatusUpper === "CANCELLED" || statusUpper === "CANCELLED";
-    const isFailed =
-      paymentStatusUpper === "FAILED" || statusUpper === "FAILED";
-
-    if (!isCancelled && !isFailed) {
-      return {
-        success: false,
-        error: "This order is not in a cancelled or failed state and cannot be removed.",
-      };
-    }
-
+    // Customer "Hide/Remove Order": hides this order from the customer's portal
+    // without altering inventory, payment status, or the canonical admin record.
     await orderRef.update(
       sanitizeFirestoreData({
         hiddenFromCustomer: true,
-        deletedAt: FieldValue.serverTimestamp(),
-        deletedBy: "customer",
+        hiddenAt: FieldValue.serverTimestamp(),
+        hiddenBy: "customer",
         updatedAt: FieldValue.serverTimestamp(),
       })
     );
 
-    console.log(`[NEKARA ORDERS] Order ${orderId} soft-deleted by customer ${userId}.`);
+    console.log(`[NEKARA ORDERS] Order ${orderId} hidden from customer portal by customer ${userId}.`);
     return { success: true };
   } catch (err: any) {
     console.error(`[NEKARA ORDERS] Error removing order ${orderId}:`, err);

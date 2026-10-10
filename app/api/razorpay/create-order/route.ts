@@ -208,31 +208,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Authoritative Server-side Shipping Rate Calculation
+    // Authoritative Server-side Shipping Rate Calculation & Verification
     const destinationPin = (
       shippingAddress.postalCode ||
       shippingAddress.pincode ||
       ""
     ).replace(/\D/g, "");
 
+    if (destinationPin.length !== 6) {
+      return NextResponse.json(
+        { error: "A valid 6-digit destination postal PIN code is required to compute shipping." },
+        { status: 400 }
+      );
+    }
+
     const totalQuantity = enrichedItems.reduce((acc, curr) => acc + (curr.quantity || 1), 0);
 
     let shippingRateResult: ShippingRateCalculationResult | null = null;
     let authoritativeShippingFee = 0;
 
-    if (destinationPin.length === 6) {
-      try {
-        shippingRateResult = await calculateShippingRate({
-          destinationPincode: destinationPin,
-          totalQuantity,
-          orderSubtotal: serverTotalAmount,
-        });
-        if (shippingRateResult && typeof shippingRateResult.shippingFee === "number") {
-          authoritativeShippingFee = shippingRateResult.shippingFee;
-        }
-      } catch (shipErr: any) {
-        console.warn("[CREATE ORDER] Shipping calculation fallback:", shipErr?.message || shipErr);
+    try {
+      shippingRateResult = await calculateShippingRate({
+        destinationPincode: destinationPin,
+        totalQuantity,
+        orderSubtotal: serverTotalAmount,
+      });
+      if (shippingRateResult && typeof shippingRateResult.shippingFee === "number") {
+        authoritativeShippingFee = shippingRateResult.shippingFee;
       }
+    } catch (shipErr: any) {
+      console.error("[CREATE ORDER] Shipping calculation error:", shipErr?.message || shipErr);
+      return NextResponse.json(
+        { error: "Failed to verify delivery rates for destination PIN code. Please retry." },
+        { status: 400 }
+      );
     }
 
     // Authoritative Server-side Additive Calculation (2% Fee + 18% GST + Shipping)

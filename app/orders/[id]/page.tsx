@@ -11,55 +11,52 @@ import { NekaraOrder, OrderStatus } from "@/types/order";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { ArrowLeftIcon, CheckIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
+import { resolveOrderStatuses } from "@/lib/order-status";
 
 function renderOrderBadges(order: NekaraOrder) {
-  const payUpper = (
-    order.paymentStatus ||
-    (order.status === "PAID" ? "Paid" : order.status === "Cancelled" ? "Cancelled" : order.status === "Failed" ? "Failed" : "Pending")
-  ).toUpperCase();
-  const orderUpper = (order.orderStatus || order.status || "Pending").toUpperCase();
+  const statusInfo = resolveOrderStatuses(order);
 
   let paymentBadge = null;
-  if (payUpper === "PAID") {
+  if (statusInfo.primaryPaymentBadgeVariant === "paid") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#EBF5EE] text-[#064238] border border-[#C2E3CD]">
         <span className="w-1.5 h-1.5 rounded-full bg-[#064238]" />
         Payment Completed
       </span>
     );
-  } else if (payUpper === "CANCELLED") {
-    paymentBadge = (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FAF6F0] text-[#786D5F] border border-[#D9CDBB]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#786D5F]" />
-        Payment Cancelled
-      </span>
-    );
-  } else if (payUpper === "FAILED") {
-    paymentBadge = (
-      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
-        Payment Failed
-      </span>
-    );
-  } else if (payUpper === "REFUNDED") {
+  } else if (statusInfo.primaryPaymentBadgeVariant === "refunded") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-purple-50 text-purple-900 border border-purple-200">
         <span className="w-1.5 h-1.5 rounded-full bg-purple-700" />
         Payment Refunded
       </span>
     );
-  } else if (payUpper.includes("REFUND PENDING") || payUpper.includes("REFUND PROCESSING")) {
+  } else if (statusInfo.primaryPaymentBadgeVariant === "refund_pending") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-purple-50/70 text-purple-800 border border-purple-200">
         <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
         Refund Processing
       </span>
     );
-  } else if (payUpper.includes("REFUND FAILED")) {
+  } else if (statusInfo.primaryPaymentBadgeVariant === "refund_failed") {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-rose-100 text-rose-900 border border-rose-300">
         <span className="w-1.5 h-1.5 rounded-full bg-rose-700" />
         Refund Failed
+      </span>
+    );
+  } else if (statusInfo.primaryPaymentBadgeVariant === "cancelled") {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FAF6F0] text-[#786D5F] border border-[#D9CDBB]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#786D5F]" />
+        Payment Cancelled
+      </span>
+    );
+  } else if (statusInfo.primaryPaymentBadgeVariant === "failed") {
+    paymentBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#DC2626]" />
+        Payment Failed
       </span>
     );
   } else {
@@ -72,19 +69,25 @@ function renderOrderBadges(order: NekaraOrder) {
   }
 
   let orderBadge = null;
-  if (orderUpper === "DELIVERED") {
+  if (statusInfo.fulfillmentBadgeVariant === "delivered") {
     orderBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#EBF5EE] text-[#064238] border border-[#C2E3CD]">
         Delivered
       </span>
     );
-  } else if (orderUpper === "SHIPPED") {
+  } else if (statusInfo.fulfillmentBadgeVariant === "shipped") {
     orderBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#FEF3C7] text-[#92400E] border border-[#FDE68A]">
         Dispatched / In Transit
       </span>
     );
-  } else if (orderUpper === "CONFIRMED" || orderUpper === "PROCESSING") {
+  } else if (statusInfo.fulfillmentBadgeVariant === "processing") {
+    orderBadge = (
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#02221D]/10 text-[#02221D] border border-[#02221D]/20">
+        Processing
+      </span>
+    );
+  } else if (statusInfo.fulfillmentBadgeVariant === "confirmed") {
     orderBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-[#02221D]/10 text-[#02221D] border border-[#02221D]/20">
         Order Confirmed
@@ -143,7 +146,7 @@ export default function OrderDetailPage({ params }: PageProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [notFound, setNotFound] = useState<boolean>(false);
   const [isPaymentSuccessBanner, setIsPaymentSuccessBanner] = useState<boolean>(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
+  const [showDeleteStep, setShowDeleteStep] = useState<0 | 1 | 2>(0);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   useEffect(() => {
@@ -155,7 +158,7 @@ export default function OrderDetailPage({ params }: PageProps) {
     }
   }, []);
 
-  const handleRemoveOrder = async () => {
+  const handleHideOrderConfirm = async () => {
     if (!user || !order) return;
 
     try {
@@ -172,13 +175,14 @@ export default function OrderDetailPage({ params }: PageProps) {
 
       const data = await res.json();
       if (!res.ok || !data?.success) {
-        throw new Error(data?.error || "Failed to remove order.");
+        throw new Error(data?.error || "Failed to hide order.");
       }
 
       router.push("/orders");
     } catch (err: any) {
-      alert(err.message || "Failed to remove order.");
+      alert(err.message || "Failed to hide order.");
       setIsDeleting(false);
+      setShowDeleteStep(0);
     }
   };
 
@@ -253,13 +257,14 @@ export default function OrderDetailPage({ params }: PageProps) {
     ? order.id
     : `NK-${order.id.slice(-8).toUpperCase()}`;
 
+  const statusInfo = resolveOrderStatuses(order);
   const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   return (
     <div className="w-full min-h-screen pt-28 sm:pt-36 pb-24 bg-[#FDFBF7]">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
         {/* Back Link */}
-        <div>
+        <div className="flex items-center justify-between">
           <Link
             href="/orders"
             className="inline-flex items-center gap-2 text-xs font-sans text-[#3A2115]/70 hover:text-[#075E5A] transition-colors"
@@ -267,10 +272,40 @@ export default function OrderDetailPage({ params }: PageProps) {
             <ArrowLeftIcon size={14} />
             <span>Back to My Orders</span>
           </Link>
+
+          <button
+            type="button"
+            onClick={() => setShowDeleteStep(1)}
+            className="inline-flex items-center gap-1.5 text-xs font-sans text-rose-800 hover:text-rose-950 hover:underline transition-colors"
+          >
+            Hide Order
+          </button>
         </div>
 
-        {/* Payment Confirmation Banner */}
-        {(isPaymentSuccessBanner || order.paymentStatus === "Paid" || order.status === "PAID") && (
+        {/* Refund Notification Banner (Highest Priority) */}
+        {statusInfo.isRefunded && (
+          <div className="bg-purple-50/90 border border-purple-200 rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="w-8 h-8 rounded-full bg-purple-700 text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5 font-bold">
+              ✓
+            </div>
+            <div className="flex-1">
+              <h3 className="font-serif text-base font-bold text-purple-950">
+                Payment Refunded
+              </h3>
+              <p className="text-xs text-purple-900/80 font-sans mt-0.5 leading-relaxed">
+                This transaction has been refunded.
+                {order.refund?.amount ? ` Amount: ${formatINR(order.refund.amount)}.` : ""}
+                {order.refund?.refundId ? ` Refund ID: ${order.refund.refundId}.` : ""}
+                {order.refund?.method === "razorpay"
+                  ? " The amount will reflect back to your original source account within 5–7 business days per banking guidelines."
+                  : " Settled via direct bank transfer."}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Payment Confirmation Banner (Only when NOT refunded) */}
+        {!statusInfo.isRefunded && (isPaymentSuccessBanner || statusInfo.isPaid) && (
           <div className="bg-[#EBF5EE] border border-[#C2E3CD] rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
             <div className="w-8 h-8 rounded-full bg-[#064238] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5">
               <CheckIcon size={16} />
@@ -310,7 +345,7 @@ export default function OrderDetailPage({ params }: PageProps) {
         )}
 
         {/* Payment Cancelled Banner */}
-        {(order.paymentStatus === "Cancelled" || order.status === "Cancelled") && (
+        {!statusInfo.isRefunded && statusInfo.isCancelled && (
           <div className="bg-[#FAF6F0] border border-[#B58A45]/30 rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
             <div className="w-8 h-8 rounded-full bg-[#FAF3E7] text-[#786D5F] border border-[#D9CDBB] flex items-center justify-center shrink-0 mt-0.5 font-bold">
               ✕
@@ -331,18 +366,18 @@ export default function OrderDetailPage({ params }: PageProps) {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={() => setShowDeleteStep(1)}
                   className="inline-flex items-center justify-center px-4 py-2 rounded-xs border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 font-sans font-semibold text-xs tracking-wider uppercase transition-all"
                 >
-                  Remove Order
+                  Hide Order
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Payment Failed Banner */}
-        {(order.paymentStatus === "Failed" || order.status === "Failed") && (
+        {/* Payment Failed Banner (Guarded against Refunded) */}
+        {!statusInfo.isRefunded && statusInfo.isFailed && (
           <div className="bg-[#FEE2E2]/60 border border-[#FECACA] rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
             <div className="w-8 h-8 rounded-full bg-[#DC2626] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5 font-bold">
               !
@@ -363,10 +398,10 @@ export default function OrderDetailPage({ params }: PageProps) {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => setShowDeleteConfirm(true)}
+                  onClick={() => setShowDeleteStep(1)}
                   className="inline-flex items-center justify-center px-4 py-2 rounded-xs border border-rose-200 bg-rose-50/60 hover:bg-rose-100 text-rose-800 font-sans font-semibold text-xs tracking-wider uppercase transition-all"
                 >
-                  Remove Order
+                  Hide Order
                 </button>
               </div>
             </div>
@@ -374,38 +409,34 @@ export default function OrderDetailPage({ params }: PageProps) {
         )}
 
         {/* Genuine Payment Pending Banner */}
-        {order.paymentStatus === "Pending" &&
-          order.status !== "Cancelled" &&
-          order.status !== "Failed" &&
-          order.status !== "PAID" &&
-          order.status !== "Confirmed" && (
-            <div className="bg-[#FAF3E7] border border-[#B58A45]/30 rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
-              <div className="w-8 h-8 rounded-full bg-[#B58A45] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5 font-bold">
-                ⏳
-              </div>
-              <div>
-                <h3 className="font-serif text-base font-bold text-[#8C6B2D]">
-                  Payment Status: Pending
-                </h3>
-                <p className="text-xs text-[#3A2115]/80 font-sans mt-0.5 leading-relaxed">
-                  Your payment is currently being confirmed by the payment network. This order will automatically update upon payment confirmation.
-                </p>
-              </div>
+        {statusInfo.isPendingPayment && (
+          <div className="bg-[#FAF3E7] border border-[#B58A45]/30 rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
+            <div className="w-8 h-8 rounded-full bg-[#B58A45] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5 font-bold">
+              ⏳
             </div>
-          )}
+            <div>
+              <h3 className="font-serif text-base font-bold text-[#8C6B2D]">
+                Payment Status: Pending
+              </h3>
+              <p className="text-xs text-[#3A2115]/80 font-sans mt-0.5 leading-relaxed">
+                Your payment is currently being confirmed by the payment network. This order will automatically update upon payment confirmation.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Order Header Summary Banner */}
         <div className="bg-[#FFFBF5] rounded-xs border border-[#B58A45]/30 p-6 sm:p-8 shadow-[0_4px_24px_rgba(58,33,21,0.04)]">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-[#B58A45]/20 gap-4">
             <div>
               <span className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-[#B58A45] block mb-1">
-                {order.paymentStatus === "Refunded"
+                {statusInfo.isRefunded
                   ? "ORDER REFUNDED"
-                  : order.paymentStatus === "Paid" || order.status === "PAID" || order.status === "Confirmed"
+                  : statusInfo.isPaid
                   ? "PURCHASE CONFIRMATION"
-                  : order.paymentStatus === "Cancelled" || order.status === "Cancelled"
+                  : statusInfo.isCancelled
                   ? "CANCELLED CHECKOUT"
-                  : order.paymentStatus === "Failed" || order.status === "Failed"
+                  : statusInfo.isFailed
                   ? "FAILED PAYMENT"
                   : "PENDING PAYMENT"}
               </span>
@@ -433,9 +464,11 @@ export default function OrderDetailPage({ params }: PageProps) {
                 <span className="text-xs font-bold uppercase tracking-wider text-purple-900">
                   Refund Processed ({formatINR(order.refund.amount)})
                 </span>
-                <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded-sm">
-                  {order.refund.refundId}
-                </span>
+                {order.refund.refundId && (
+                  <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded-sm">
+                    {order.refund.refundId}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-purple-900/80 leading-relaxed">
                 {order.refund.method === "razorpay"
@@ -502,24 +535,33 @@ export default function OrderDetailPage({ params }: PageProps) {
 
           {/* Financial & Delivery Details Grid */}
           <div className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Delivery Information & Tracking */}
+            {/* Delivery Information & Comprehensive Tracking */}
             <div className="space-y-4">
               <div className="space-y-3">
                 <h4 className="font-serif text-sm font-semibold uppercase tracking-wider text-[#241A15]">
-                  Delivery Information
+                  Delivery Address
                 </h4>
 
                 {order.shippingAddress ? (
                   <div className="p-4 bg-[#FAF6F0] rounded-xs border border-[#B58A45]/20 text-xs text-[#3A2115]/80 space-y-1 font-sans">
-                    {order.shippingAddress.name && (
+                    {(order.shippingAddress.fullName || order.shippingAddress.name) && (
                       <p className="font-semibold text-[#241A15]">
-                        {order.shippingAddress.name}
+                        {order.shippingAddress.fullName || order.shippingAddress.name}
                       </p>
                     )}
                     {order.shippingAddress.phone && (
                       <p>Phone: {order.shippingAddress.phone}</p>
                     )}
-                    {order.shippingAddress.street || order.shippingAddress.address ? (
+                    {order.shippingAddress.house && (
+                      <p>{order.shippingAddress.house}</p>
+                    )}
+                    {order.shippingAddress.area && (
+                      <p>{order.shippingAddress.area}</p>
+                    )}
+                    {order.shippingAddress.landmark && (
+                      <p className="text-[11px] text-[#3A2115]/60">Near: {order.shippingAddress.landmark}</p>
+                    )}
+                    {(!order.shippingAddress.house && !order.shippingAddress.area && (order.shippingAddress.street || order.shippingAddress.address)) ? (
                       <p>{order.shippingAddress.street || order.shippingAddress.address}</p>
                     ) : null}
                     {(order.shippingAddress.city || order.shippingAddress.state) && (
@@ -546,59 +588,90 @@ export default function OrderDetailPage({ params }: PageProps) {
                 )}
               </div>
 
-              {/* Delivery Partner & Tracking Section (If Dispatched) */}
-              {order.shipment?.trackingId && (
-                <div className="p-4 bg-[#EBF5EE]/80 rounded-xs border border-[#C2E3CD] text-xs font-sans space-y-2 text-[#064238]">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold uppercase tracking-wider text-[11px] text-[#064238]">
-                      🚚 Live Parcel Tracking
-                    </span>
-                    <span className="font-semibold px-2 py-0.5 rounded-full bg-[#064238] text-white text-[10px]">
-                      {order.shipment.carrier}
-                    </span>
+              {/* Delivery Partner & Live Tracking Section */}
+              <div className="space-y-2">
+                <h4 className="font-serif text-sm font-semibold uppercase tracking-wider text-[#241A15]">
+                  Shipment &amp; Tracking
+                </h4>
+
+                {order.shipment ? (
+                  <div className="p-4 bg-[#FAF6F0] rounded-xs border border-[#B58A45]/30 text-xs font-sans space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-[#B58A45]/20">
+                      <div>
+                        <span className="text-[10px] uppercase font-semibold text-[#3A2115]/60 tracking-wider block">
+                          Delivery Partner
+                        </span>
+                        <p className="font-serif font-bold text-sm text-[#02221D]">
+                          {order.shipment.carrier === "Other" && order.shipment.customCarrierName
+                            ? order.shipment.customCarrierName
+                            : order.shipment.carrier || "Courier Partner"}
+                        </p>
+                      </div>
+                      <span className="font-semibold px-2.5 py-0.5 rounded-full bg-[#064238] text-white text-[10px] tracking-wider uppercase">
+                        {order.shipment.status || "In Transit"}
+                      </span>
+                    </div>
+
+                    {order.shipment.trackingId ? (
+                      <div className="flex items-center justify-between bg-white/70 p-2.5 rounded-xs border border-[#B58A45]/20">
+                        <div>
+                          <span className="text-[10px] uppercase font-semibold text-[#3A2115]/60 tracking-wider block">
+                            AWB / Tracking Number
+                          </span>
+                          <span className="font-mono font-bold text-[#02221D] text-xs select-all">
+                            {order.shipment.trackingId}
+                          </span>
+                        </div>
+                        {order.shipment.trackingUrl && (
+                          <a
+                            href={order.shipment.trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center justify-center px-3 py-1.5 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-semibold text-[11px] tracking-wider uppercase transition-colors shrink-0"
+                          >
+                            Track Online →
+                          </a>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-amber-50/80 rounded-xs border border-amber-200 text-amber-900 text-[11px]">
+                        Tracking information will be available after dispatch processing.
+                      </div>
+                    )}
+
+                    {order.shipment.dispatchedAt && (
+                      <div className="flex items-center justify-between text-[11px] text-[#3A2115]/75">
+                        <span>Dispatch Date:</span>
+                        <span className="font-medium text-[#241A15]">
+                          {formatDetailDate(order.shipment.dispatchedAt)}
+                        </span>
+                      </div>
+                    )}
+
+                    {order.shipment.carrierPhone && (
+                      <div className="flex items-center justify-between text-[11px] text-[#3A2115]/75">
+                        <span>Courier Helpline:</span>
+                        <a
+                          href={`tel:${order.shipment.carrierPhone}`}
+                          className="font-mono font-semibold text-[#075E5A] hover:underline"
+                        >
+                          {order.shipment.carrierPhone}
+                        </a>
+                      </div>
+                    )}
+
+                    {order.shipment.notes && (
+                      <p className="text-[11px] text-[#3A2115]/70 italic pt-1 border-t border-[#B58A45]/20">
+                        Note: {order.shipment.notes}
+                      </p>
+                    )}
                   </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[#3A2115]/75">AWB / Tracking Number:</span>
-                    <span className="font-mono font-bold text-[#02221D]">
-                      {order.shipment.trackingId}
-                    </span>
+                ) : (
+                  <div className="p-4 bg-[#FAF6F0] rounded-xs border border-[#B58A45]/20 text-xs text-[#3A2115]/65 font-sans leading-relaxed">
+                    Shipment details not available yet. Once your parcel is prepared and dispatched by our studio, courier and tracking numbers will appear here.
                   </div>
-
-                  {order.shipment.dispatchedAt && (
-                    <div className="flex items-center justify-between text-[11px] text-[#3A2115]/70">
-                      <span>Dispatched On:</span>
-                      <span>{formatDetailDate(order.shipment.dispatchedAt)}</span>
-                    </div>
-                  )}
-
-                  {order.shipment.carrierPhone && (
-                    <div className="flex items-center justify-between text-[11px] text-[#3A2115]/70">
-                      <span>Delivery Support:</span>
-                      <span>{order.shipment.carrierPhone}</span>
-                    </div>
-                  )}
-
-                  {order.shipment.notes && (
-                    <p className="text-[11px] text-[#064238]/80 italic pt-1 border-t border-[#C2E3CD]">
-                      Note: {order.shipment.notes}
-                    </p>
-                  )}
-
-                  {order.shipment.trackingUrl && (
-                    <div className="pt-2">
-                      <a
-                        href={order.shipment.trackingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center w-full py-2 px-3 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-semibold text-xs tracking-wider uppercase transition-colors"
-                      >
-                        Track Shipment on {order.shipment.carrier} →
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Financial Summary */}
@@ -628,9 +701,7 @@ export default function OrderDetailPage({ params }: PageProps) {
                 </div>
                 <div className="pt-2 border-t border-[#B58A45]/20 flex justify-between font-serif text-base font-bold text-[#02221D]">
                   <span>
-                    {order.paymentStatus === "Paid" || order.status === "PAID"
-                      ? "Total Paid"
-                      : "Total Amount"}
+                    {statusInfo.isPaid ? "Total Paid" : "Total Amount"}
                   </span>
                   <span className="text-[#075E5A]">{formatINR(order.totalAmount)}</span>
                 </div>
@@ -640,32 +711,67 @@ export default function OrderDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Soft-Delete Confirmation Dialog Modal */}
-      {showDeleteConfirm && (
+      {/* 2-Step Confirmation Modal for Hiding Order */}
+      {showDeleteStep === 1 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-[#FFFBF5] border border-[#B58A45]/30 rounded-xs p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <span className="text-[10px] font-sans font-semibold tracking-widest uppercase text-rose-800 block">
+              Step 1 of 2 — Confirmation
+            </span>
             <h3 className="font-serif text-lg font-bold text-[#02221D]">
-              Remove this order?
+              Hide Order #{displayId}?
             </h3>
             <p className="text-xs sm:text-sm text-[#3A2115]/75 font-sans leading-relaxed">
-              Are you sure you want to remove this cancelled payment order? This will remove the uncompleted order from your purchase history.
+              This will remove this order from your personal purchase history on the customer portal. It will not cancel any live delivery or affect the store&apos;s administrative records.
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                disabled={isDeleting}
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
+                onClick={() => setShowDeleteStep(0)}
+                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                onClick={() => setShowDeleteStep(2)}
+                className="px-4 py-2 rounded-xs bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] font-sans font-semibold text-xs uppercase tracking-wider transition-colors"
+              >
+                Proceed to Final Confirmation →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteStep === 2 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <div className="bg-[#FFFBF5] border border-rose-300 rounded-xs p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+            <span className="text-[10px] font-sans font-semibold tracking-widest uppercase text-rose-800 block">
+              Step 2 of 2 — Final Decision
+            </span>
+            <h3 className="font-serif text-lg font-bold text-rose-900">
+              Confirm Hiding Order
+            </h3>
+            <p className="text-xs sm:text-sm text-[#3A2115]/75 font-sans leading-relaxed">
+              Are you completely sure? Once hidden, this order cannot be retrieved from your customer account page.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
                 disabled={isDeleting}
-                onClick={handleRemoveOrder}
+                onClick={() => setShowDeleteStep(0)}
+                className="px-4 py-2 rounded-xs border border-[#B58A45]/40 text-[#3A2115] hover:bg-[#FAF6F0] font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50"
+              >
+                Keep Order
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={handleHideOrderConfirm}
                 className="px-4 py-2 rounded-xs bg-rose-700 hover:bg-rose-800 text-white font-sans font-semibold text-xs uppercase tracking-wider transition-colors disabled:opacity-50 flex items-center gap-2"
               >
-                {isDeleting ? "Removing..." : "Remove Order"}
+                {isDeleting ? "Hiding..." : "Yes, Hide Order"}
               </button>
             </div>
           </div>

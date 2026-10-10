@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -78,9 +78,11 @@ export default function CartPage() {
     postalCode: "",
   });
 
-  // Dynamic Shipping Rate state
+  // Shipping calculation state machine: 'idle' | 'calculating' | 'success' | 'error' | 'stale'
+  type ShippingCalcState = "idle" | "calculating" | "success" | "error" | "stale";
+  const [shippingState, setShippingState] = useState<ShippingCalcState>("idle");
   const [shippingFee, setShippingFee] = useState<number>(0);
-  const [isCalculatingShipping, setIsCalculatingShipping] = useState<boolean>(false);
+  const [shippingErrorMessage, setShippingErrorMessage] = useState<string | null>(null);
   const [shippingQuoteInfo, setShippingQuoteInfo] = useState<{
     quoteSource?: string;
     message?: string;
@@ -89,13 +91,25 @@ export default function CartPage() {
   // Authoritative payment fee calculation for customer preview with shipping fee
   const breakdown = calculatePaymentBreakdown(totalAmount, undefined, shippingFee);
 
-  // Auto-fetch shipping rate whenever 6-digit PIN code is entered
-  useEffect(() => {
-    const cleanPin = shippingAddress.postalCode.replace(/\D/g, "");
-    if (cleanPin.length === 6) {
-      let isMounted = true;
-      setIsCalculatingShipping(true);
-      fetch("/api/get-shipping-rate", {
+  // Shipping rate fetch with abort controller & request counter to prevent stale race conditions
+  const shippingReqCounter = React.useRef(0);
+
+  const calculateShippingForPin = useCallback(async (pin: string) => {
+    const cleanPin = pin.replace(/\D/g, "");
+    if (cleanPin.length !== 6) {
+      setShippingState("idle");
+      setShippingFee(0);
+      setShippingQuoteInfo(null);
+      setShippingErrorMessage(null);
+      return;
+    }
+
+    const currentReq = ++shippingReqCounter.current;
+    setShippingState("calculating");
+    setShippingErrorMessage(null);
+
+    try {
+      const res = await fetch("/api/get-shipping-rate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,33 +117,45 @@ export default function CartPage() {
           quantity: totalItems || 1,
           subtotal: totalAmount,
         }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (!isMounted) return;
-          setIsCalculatingShipping(false);
-          if (data && data.success && typeof data.shippingFee === "number") {
-            setShippingFee(data.shippingFee);
-            setShippingQuoteInfo({
-              quoteSource: data.quoteSource,
-              message: data.message,
-            });
-          }
-        })
-        .catch((err) => {
-          if (!isMounted) return;
-          setIsCalculatingShipping(false);
-          console.warn("[CHECKOUT SHIPPING RATE ERROR]:", err);
-        });
+      });
 
-      return () => {
-        isMounted = false;
-      };
+      // Discard response if superseded by a newer request
+      if (currentReq !== shippingReqCounter.current) return;
+
+      const data = await res.json();
+      if (!res.ok || !data || !data.success || typeof data.shippingFee !== "number") {
+        setShippingState("error");
+        setShippingErrorMessage(data?.message || data?.error || "Unable to calculate delivery charges for this PIN code.");
+        return;
+      }
+
+      setShippingFee(data.shippingFee);
+      setShippingQuoteInfo({
+        quoteSource: data.quoteSource,
+        message: data.message,
+      });
+      setShippingState("success");
+      setShippingErrorMessage(null);
+    } catch (err: any) {
+      if (currentReq !== shippingReqCounter.current) return;
+      console.warn("[CHECKOUT SHIPPING RATE ERROR]:", err);
+      setShippingState("error");
+      setShippingErrorMessage(err.message || "Failed to calculate delivery fee. Please retry.");
+    }
+  }, [totalItems, totalAmount]);
+
+  // Trigger recalculation on PIN change or cart total change
+  useEffect(() => {
+    const cleanPin = shippingAddress.postalCode.replace(/\D/g, "");
+    if (cleanPin.length === 6) {
+      calculateShippingForPin(cleanPin);
     } else {
+      setShippingState("idle");
       setShippingFee(0);
       setShippingQuoteInfo(null);
+      setShippingErrorMessage(null);
     }
-  }, [shippingAddress.postalCode, totalItems, totalAmount]);
+  }, [shippingAddress.postalCode, calculateShippingForPin]);
 
   // Pre-fill customer details from profile / auth when available
   useEffect(() => {
@@ -232,6 +258,25 @@ export default function CartPage() {
     const cleanPin = shippingAddress.postalCode.replace(/\D/g, "");
     if (!cleanPin || cleanPin.length !== 6) {
       setPaymentAlert({ type: "error", message: "Please enter a valid 6-digit postal PIN code." });
+      return;
+    }
+
+    // Explicit Checkout Payment Lock: Require completed shipping calculation
+    if (shippingState === "calculating") {
+      setPaymentAlert({
+        type: "error",
+        message: "Calculating delivery charges. Please wait a moment...",
+      });
+      return;
+    }
+
+    if (shippingState !== "success") {
+      setPaymentAlert({
+        type: "error",
+        message:
+          shippingErrorMessage ||
+          "Valid shipping calculation required before proceeding. Please enter a valid 6-digit PIN code and verify delivery rates.",
+      });
       return;
     }
 
@@ -945,23 +990,49 @@ export default function CartPage() {
                         </span>
                       )}
                     </div>
-                    {isCalculatingShipping ? (
+                    {shippingState === "calculating" ? (
                       <span className="text-[11px] text-[#B58A45] flex items-center gap-1">
                         <span className="w-2.5 h-2.5 border border-[#B58A45] border-t-transparent rounded-full animate-spin inline-block" />
-                        Calculating...
+                        Calculating shipping...
                       </span>
-                    ) : shippingFee > 0 ? (
-                      <span className="font-medium text-[#241A15]">
-                        {formatINR(shippingFee)}
-                      </span>
-                    ) : shippingAddress.postalCode.length === 6 ? (
-                      <span className="text-[#075E5A] font-medium">Complimentary</span>
+                    ) : shippingState === "error" ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-rose-700 font-medium">Calculation error</span>
+                        <button
+                          type="button"
+                          onClick={() => calculateShippingForPin(shippingAddress.postalCode)}
+                          className="text-[10px] text-[#075E5A] hover:underline font-bold"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : shippingState === "success" ? (
+                      shippingFee > 0 ? (
+                        <span className="font-medium text-[#241A15]">
+                          {formatINR(shippingFee)}
+                        </span>
+                      ) : (
+                        <span className="text-[#075E5A] font-medium">Complimentary</span>
+                      )
                     ) : (
                       <span className="text-[11px] text-[#3A2115]/50 italic">
                         Enter 6-digit PIN code
                       </span>
                     )}
                   </div>
+
+                  {shippingState === "error" && shippingErrorMessage && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xs text-[11px] text-rose-800 flex items-center justify-between">
+                      <span>{shippingErrorMessage}</span>
+                      <button
+                        type="button"
+                        onClick={() => calculateShippingForPin(shippingAddress.postalCode)}
+                        className="text-[#075E5A] hover:underline font-semibold ml-2 shrink-0"
+                      >
+                        Retry Calculation
+                      </button>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between text-[11px] text-[#3A2115]/60">
                     <span>Applicable Taxes</span>
@@ -1002,17 +1073,17 @@ export default function CartPage() {
                     <span aria-hidden="true">→</span>
                   </button>
                 ) : (
-                  /* Step 2 CTA: Pay via Razorpay */
+                  /* Step 2 CTA: Pay via Razorpay - LOCKED until shippingState === 'success' */
                   <div className="space-y-3">
                     <button
                       type="submit"
                       form="checkout-shipping-form"
-                      disabled={hasStockIssue || isPaymentLoading}
+                      disabled={hasStockIssue || isPaymentLoading || shippingState !== "success"}
                       className={cn(
-                        "w-full h-12 rounded-xs font-sans font-semibold text-xs tracking-[0.18em] uppercase transition-all duration-300 shadow-sm flex items-center justify-center gap-2 min-h-[44px] cursor-pointer",
-                        hasStockIssue || isPaymentLoading
-                          ? "bg-stone-300 text-stone-500 cursor-not-allowed"
-                          : "bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] hover:shadow-md"
+                        "w-full h-12 rounded-xs font-sans font-semibold text-xs tracking-[0.18em] uppercase transition-all duration-300 shadow-sm flex items-center justify-center gap-2 min-h-[44px]",
+                        hasStockIssue || isPaymentLoading || shippingState !== "success"
+                          ? "bg-stone-300 text-stone-500 cursor-not-allowed opacity-80"
+                          : "bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] hover:shadow-md cursor-pointer"
                       )}
                     >
                       {isPaymentLoading ? (
@@ -1020,6 +1091,13 @@ export default function CartPage() {
                           <div className="w-4 h-4 border-2 border-[#FAF5ED] border-t-transparent rounded-full animate-spin" />
                           <span>Processing...</span>
                         </>
+                      ) : shippingState === "calculating" ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-stone-500 border-t-transparent rounded-full animate-spin" />
+                          <span>Calculating Shipping Charges...</span>
+                        </>
+                      ) : shippingState !== "success" ? (
+                        <span>Enter PIN code to unlock payment</span>
                       ) : (
                         <>
                           <span>🔒 Pay {formatINR(breakdown.totalAmount)} via Razorpay</span>
