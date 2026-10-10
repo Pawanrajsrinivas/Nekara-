@@ -11,29 +11,42 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.text();
     const signature = req.headers.get("x-razorpay-signature");
 
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET?.trim();
 
-    // Validate signature if webhook secret is configured
-    if (webhookSecret) {
-      if (!signature) {
-        return NextResponse.json(
-          { error: "Missing x-razorpay-signature header" },
-          { status: 400 }
-        );
-      }
+    if (!webhookSecret) {
+      console.error(
+        "[RAZORPAY WEBHOOK ERROR]: RAZORPAY_WEBHOOK_SECRET is not configured on server."
+      );
+      return NextResponse.json(
+        { error: "Webhook secret is not configured on the server." },
+        { status: 500 }
+      );
+    }
 
-      const expectedSignature = crypto
-        .createHmac("sha256", webhookSecret)
-        .update(rawBody)
-        .digest("hex");
+    if (!signature) {
+      return NextResponse.json(
+        { error: "Missing x-razorpay-signature header" },
+        { status: 400 }
+      );
+    }
 
-      if (expectedSignature !== signature) {
-        console.error("[RAZORPAY WEBHOOK]: Signature mismatch");
-        return NextResponse.json(
-          { error: "Invalid webhook signature" },
-          { status: 400 }
-        );
-      }
+    const expectedSignature = crypto
+      .createHmac("sha256", webhookSecret)
+      .update(rawBody)
+      .digest("hex");
+
+    const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+    const signatureBuffer = Buffer.from(signature, "utf8");
+
+    if (
+      expectedBuffer.length !== signatureBuffer.length ||
+      !crypto.timingSafeEqual(expectedBuffer, signatureBuffer)
+    ) {
+      console.error("[RAZORPAY WEBHOOK SECURITY ALERT]: Webhook signature mismatch.");
+      return NextResponse.json(
+        { error: "Invalid webhook signature" },
+        { status: 400 }
+      );
     }
 
     const payload = JSON.parse(rawBody);
@@ -81,6 +94,9 @@ export async function POST(req: NextRequest) {
                 items: targetOrder.items || [],
                 totalAmount: targetOrder.totalAmount,
                 subtotal: targetOrder.subtotal,
+                paymentProcessingFee: targetOrder.paymentProcessingFee,
+                paymentProcessingFeeBase: targetOrder.paymentProcessingFeeBase,
+                paymentProcessingFeeGST: targetOrder.paymentProcessingFeeGST,
                 shippingFee: targetOrder.shippingFee,
                 shippingAddress: targetOrder.shippingAddress,
                 customerName: targetOrder.customerName,

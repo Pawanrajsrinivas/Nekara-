@@ -225,6 +225,8 @@ export async function POST(req: NextRequest) {
       process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ""
     ).trim();
     const rawKeySecret = (process.env.RAZORPAY_KEY_SECRET || "").trim();
+    const rawPublicKeyId = (process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "").trim();
+
     if (!rawKeyId || !rawKeySecret) {
       return NextResponse.json(
         {
@@ -234,6 +236,30 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    if (rawKeyId && rawPublicKeyId) {
+      const serverMode = rawKeyId.startsWith("rzp_live_")
+        ? "live"
+        : rawKeyId.startsWith("rzp_test_")
+        ? "test"
+        : "unknown";
+      const publicMode = rawPublicKeyId.startsWith("rzp_live_")
+        ? "live"
+        : rawPublicKeyId.startsWith("rzp_test_")
+        ? "test"
+        : "unknown";
+
+      if (serverMode !== publicMode && serverMode !== "unknown" && publicMode !== "unknown") {
+        return NextResponse.json(
+          {
+            error: `Razorpay configuration mismatch: server key is in ${serverMode} mode, but public key is in ${publicMode} mode. Please configure both to the same mode in environment variables.`,
+            code: "RAZORPAY_MODE_MISMATCH",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
     console.log("[RAZORPAY] Credentials configured:", Boolean(rawKeyId && rawKeySecret));
     console.log("[RAZORPAY] Mode:", rawKeyId.startsWith("rzp_test_") ? "test" : rawKeyId.startsWith("rzp_live_") ? "live" : "unknown");
     console.log("[RAZORPAY] Key Prefix:", rawKeyId ? `${rawKeyId.substring(0, 9)}...` : "missing");
@@ -358,7 +384,7 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error:
-            "Razorpay authentication failed (401). Please verify that active RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET from Razorpay Dashboard (Test Mode) are saved in environment variables.",
+            "Razorpay authentication failed (401). Please verify that active RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET from Razorpay Dashboard are saved in environment variables.",
           code: "RAZORPAY_AUTH_FAILED",
         },
         { status: 401 }

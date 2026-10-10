@@ -79,15 +79,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Cryptographic HMAC-SHA256 Signature Verification
+    // 1. Cryptographic HMAC-SHA256 Signature Verification (Timing-safe)
     const expectedSignature = crypto
       .createHmac("sha256", keySecret)
       .update(`${razorpayOrderId}|${razorpayPaymentId}`)
       .digest("hex");
 
-    if (expectedSignature !== razorpaySignature) {
+    const expectedBuffer = Buffer.from(expectedSignature, "utf8");
+    const signatureBuffer = Buffer.from(razorpaySignature, "utf8");
+    const isSignatureValid =
+      expectedBuffer.length === signatureBuffer.length &&
+      crypto.timingSafeEqual(expectedBuffer, signatureBuffer);
+
+    if (!isSignatureValid) {
       console.error(
-        `[RAZORPAY VERIFY SECURITY ALERT]: Invalid signature for order ${orderId}. Expected ${expectedSignature}, received ${razorpaySignature}`
+        `[RAZORPAY VERIFY SECURITY ALERT]: Invalid signature for order ${orderId}.`
       );
       return NextResponse.json(
         { error: "Payment verification failed: Invalid authenticity signature." },
