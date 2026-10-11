@@ -429,7 +429,7 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
             </div>
 
             {/* Specifications Summary Grid */}
-            <div className="bg-[#FAF6F0] rounded-xs border border-[#B58A45]/25 p-4 sm:p-5 mb-6 grid grid-cols-2 gap-3 text-xs">
+            <div className="bg-[#FAF6F0] rounded-xs border border-[#B58A45]/25 p-4 sm:p-5 mb-6 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
               <div>
                 <span className="text-[#3A2115]/60 block text-[10px] tracking-wider uppercase font-semibold">
                   Fabric
@@ -440,10 +440,18 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
               </div>
               <div>
                 <span className="text-[#3A2115]/60 block text-[10px] tracking-wider uppercase font-semibold">
-                  Weave & Technique
+                  Weaving Type
                 </span>
                 <span className="text-[#241A15] font-medium font-serif text-sm">
-                  {product.weave || "Artisanal Handloom"}
+                  {product.weavingType === "Handloom" ? "Handloom" : "Powerloom"}
+                </span>
+              </div>
+              <div>
+                <span className="text-[#3A2115]/60 block text-[10px] tracking-wider uppercase font-semibold">
+                  Weave &amp; Technique
+                </span>
+                <span className="text-[#241A15] font-medium font-serif text-sm">
+                  {product.weave || "Traditional Zari Weave"}
                 </span>
               </div>
               <div>
@@ -624,7 +632,7 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                   <div className="space-y-3">
                     <p>
                       {product.description ||
-                        "A majestic manifestation of royal Indian textile traditions. Handwoven with certified silk threads and accentuated by authentic metallic zari highlights, this drape personifies timeless grace and artisanal prestige."}
+                        "A majestic manifestation of royal Indian textile traditions. Crafted with silk threads and accentuated by zari highlights, this drape personifies timeless grace and elegance."}
                     </p>
                     {product.sku && (
                       <p className="text-[11px] text-[#3A2115]/50">
@@ -637,16 +645,19 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                 {activeTab === "details" && (
                   <ul className="space-y-2 list-disc pl-5">
                     <li>
-                      <strong>Saree Length:</strong> 5.5 meters of uninterrupted handcrafted elegance.
+                      <strong>Saree Length:</strong> 5.5 meters of uninterrupted drape elegance.
                     </li>
                     <li>
                       <strong>Blouse Piece:</strong> Included (0.8 meter unstitched blouse fabric matching pallu accents).
                     </li>
                     <li>
-                      <strong>Weaving Technique:</strong> Interlocking warp and weft traditional pit-loom technique.
+                      <strong>Weaving Type:</strong> {product.weavingType === "Handloom" ? "Handloom" : "Powerloom"}.
                     </li>
                     <li>
-                      <strong>Zari Quality:</strong> Tested and certified electroplated zari for enduring radiance.
+                      <strong>Weave &amp; Technique:</strong> {product.weave || "Traditional warp and weft zari weave"}.
+                    </li>
+                    <li>
+                      <strong>Zari Quality:</strong> Tested electroplated zari for enduring radiance.
                     </li>
                   </ul>
                 )}
@@ -664,16 +675,13 @@ export function ProductDetailView({ product, relatedProducts = [] }: ProductDeta
                 {activeTab === "shipping" && (
                   <ul className="space-y-2 list-disc pl-5">
                     <li>
-                      <strong>Domestic Shipping:</strong> Free express insured delivery across India within 3–5 business days.
+                      <strong>Domestic Shipping:</strong> Delhivery Surface &amp; Express insured delivery across India.
                     </li>
                     <li>
                       <strong>Packaging:</strong> Arrives in NEKARA signature luxury archival keepsake gift box.
                     </li>
                     <li>
-                      <strong>Authenticity:</strong> Accompanied by official Silk Mark hologram certifying genuine handloom origin.
-                    </li>
-                    <li>
-                      <strong>Returns & Exchange:</strong> 7-day hassle-free return or exchange for unworn sarees with security tags intact.
+                      <strong>Returns &amp; Exchange:</strong> 7-day return or exchange for unworn sarees with security tags intact.
                     </li>
                   </ul>
                 )}

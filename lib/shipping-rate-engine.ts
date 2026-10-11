@@ -1,15 +1,58 @@
 /**
- * NEKARA — Server-side Logistics & Shipping Rate Engine
+ * NEKARA — Server-Side Shipping Rate Engine (Delhivery B2C / Kinko API)
  *
- * Integrates with Delhivery One & legacy Kinko APIs for real-time domestic courier rate estimates:
- * - Origin warehouse PIN code (from admin settings, default: 560064)
- * - Destination 6-digit PIN code
- * - Chargeable weight in grams: Max(Dead Weight, Volumetric Weight via L*B*H/5000 in kg => g)
- * - Surface ('S') vs Express ('E') transport modes
- * - Fallback protection with disclosed origin/quote audit snapshots
+ * Responsibilities:
+ * 1. Reads shipping configuration from Firestore `settings/shipping` (with safe defaults for origin PIN & weight).
+ * 2. Validates 6-digit Indian PIN code and shipping mode ("S" = Surface / Normal, "E" = Express).
+ * 3. Verifies PIN serviceability via Delhivery PIN Code Serviceability API.
+ * 4. Queries live Delhivery Kinko Invoice Charges API for the exact origin, destination, weight, and mode.
+ * 5. NEVER returns a hardcoded ₹150 or ₹0 fallback when Delhivery fails or is unserviceable.
  */
 
-import { getAdminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "./firebase-admin";
+
+export interface ShippingSettingsConfig {
+  enabled: boolean;
+  provider: "delhivery";
+  environment: "staging" | "production";
+  originPincode: string;
+  shippingMode: "S" | "E"; // Default mode: S = Surface (Normal), E = Express
+  surfaceEnabled: boolean;
+  expressEnabled: boolean;
+  paymentType: "Pre-paid" | "COD";
+  defaultSareeWeightGrams: number;
+  packagingWeightGrams: number;
+  lengthCm: number;
+  breadthCm: number;
+  heightCm: number;
+  freeShippingThreshold: number; // 0 = disabled
+  flatExtraHandlingFee: number;
+}
+
+export const DEFAULT_SHIPPING_SETTINGS: ShippingSettingsConfig = {
+  enabled: true,
+  provider: "delhivery",
+  environment: "production",
+  originPincode: "560064", // Default NEKARA Bengaluru dispatch PIN
+  shippingMode: "S",
+  surfaceEnabled: true,
+  expressEnabled: true,
+  paymentType: "Pre-paid",
+  defaultSareeWeightGrams: 650,
+  packagingWeightGrams: 150,
+  lengthCm: 35,
+  breadthCm: 28,
+  heightCm: 6,
+  freeShippingThreshold: 0,
+  flatExtraHandlingFee: 0,
+};
+
+export interface ShippingRateCalculationInput {
+  destinationPincode: string;
+  shippingMode?: "S" | "E";
+  totalQuantity: number;
+  orderSubtotal: number;
+}
 
 export interface ShippingRateCalculationResult {
   serviceable: boolean;
@@ -17,235 +60,341 @@ export interface ShippingRateCalculationResult {
   originPincode: string;
   destinationPincode: string;
   shippingMode: "S" | "E";
+  shippingModeLabel: string;
   chargeableWeightGrams: number;
   dimensionsCm: {
     length: number;
     breadth: number;
     height: number;
   };
-  quoteSource: "delhivery" | "configured_fallback";
+  quoteSource: "delhivery";
   providerReference?: string;
   message?: string;
-  estimatedDays?: string;
+  supportedModes?: {
+    surface: boolean;
+    express: boolean;
+    defaultMode: "S" | "E";
+  };
 }
 
-export interface ShippingSettingsSnapshot {
-  originPincode: string;
-  originWarehouseName?: string;
-  defaultPackageWeightGrams: number;
-  additionalPackagingWeightGrams: number;
-  parcelLengthCm: number;
-  parcelBreadthCm: number;
-  parcelHeightCm: number;
-  shippingMode: "S" | "E";
-  liveCalculatorEnabled: boolean;
-  allowFallbackOnFailure: boolean;
-  fallbackShippingFee: number;
-}
+export class ShippingCalculationError extends Error {
+  public code:
+    | "INVALID_PINCODE"
+    | "UNSERVICEABLE"
+    | "MODE_DISABLED"
+    | "DELHIVERY_UNAVAILABLE"
+    | "INVALID_QUOTE";
+  public statusCode: number;
 
-export const DEFAULT_SHIPPING_SETTINGS: ShippingSettingsSnapshot = {
-  originPincode: "560064",
-  originWarehouseName: "NEKARA Bangalore Central Fulfillment",
-  defaultPackageWeightGrams: 800,
-  additionalPackagingWeightGrams: 200,
-  parcelLengthCm: 38,
-  parcelBreadthCm: 28,
-  parcelHeightCm: 6,
-  shippingMode: "S",
-  liveCalculatorEnabled: true,
-  allowFallbackOnFailure: true,
-  fallbackShippingFee: 150,
-};
+  constructor(
+    message: string,
+    code:
+      | "INVALID_PINCODE"
+      | "UNSERVICEABLE"
+      | "MODE_DISABLED"
+      | "DELHIVERY_UNAVAILABLE"
+      | "INVALID_QUOTE",
+    statusCode = 400
+  ) {
+    super(message);
+    this.name = "ShippingCalculationError";
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
 
 /**
- * Loads trusted shipping settings from Firestore admin configuration or defaults.
+ * Fetches shipping settings from Firestore `settings/shipping` or returns defaults.
  */
-export async function getAuthoritativeShippingSettings(): Promise<ShippingSettingsSnapshot> {
+export async function getShippingSettings(): Promise<ShippingSettingsConfig> {
   try {
     const adminDb = getAdminDb();
     if (!adminDb) return DEFAULT_SHIPPING_SETTINGS;
 
     const snap = await adminDb.collection("settings").doc("shipping").get();
-    if (!snap.exists) return DEFAULT_SHIPPING_SETTINGS;
+    if (!snap.exists) {
+      return DEFAULT_SHIPPING_SETTINGS;
+    }
 
     const data = snap.data() || {};
     return {
-      originPincode: data.originPincode || DEFAULT_SHIPPING_SETTINGS.originPincode,
-      originWarehouseName: data.originWarehouseName || DEFAULT_SHIPPING_SETTINGS.originWarehouseName,
-      defaultPackageWeightGrams: Number(data.defaultPackageWeightGrams) || DEFAULT_SHIPPING_SETTINGS.defaultPackageWeightGrams,
-      additionalPackagingWeightGrams: Number(data.additionalPackagingWeightGrams) || DEFAULT_SHIPPING_SETTINGS.additionalPackagingWeightGrams,
-      parcelLengthCm: Number(data.parcelLengthCm) || DEFAULT_SHIPPING_SETTINGS.parcelLengthCm,
-      parcelBreadthCm: Number(data.parcelBreadthCm) || DEFAULT_SHIPPING_SETTINGS.parcelBreadthCm,
-      parcelHeightCm: Number(data.parcelHeightCm) || DEFAULT_SHIPPING_SETTINGS.parcelHeightCm,
+      enabled: data.enabled !== false,
+      provider: "delhivery",
+      environment: data.environment === "staging" ? "staging" : "production",
+      originPincode:
+        typeof data.originPincode === "string" && /^\d{6}$/.test(data.originPincode.trim())
+          ? data.originPincode.trim()
+          : DEFAULT_SHIPPING_SETTINGS.originPincode,
       shippingMode: data.shippingMode === "E" ? "E" : "S",
-      liveCalculatorEnabled: data.liveCalculatorEnabled !== false,
-      allowFallbackOnFailure: data.allowFallbackOnFailure !== false,
-      fallbackShippingFee: typeof data.fallbackShippingFee === "number" ? data.fallbackShippingFee : DEFAULT_SHIPPING_SETTINGS.fallbackShippingFee,
+      surfaceEnabled: data.surfaceEnabled !== false,
+      expressEnabled: data.expressEnabled !== false,
+      paymentType: "Pre-paid",
+      defaultSareeWeightGrams:
+        typeof data.defaultSareeWeightGrams === "number" && data.defaultSareeWeightGrams > 0
+          ? data.defaultSareeWeightGrams
+          : DEFAULT_SHIPPING_SETTINGS.defaultSareeWeightGrams,
+      packagingWeightGrams:
+        typeof data.packagingWeightGrams === "number" && data.packagingWeightGrams >= 0
+          ? data.packagingWeightGrams
+          : DEFAULT_SHIPPING_SETTINGS.packagingWeightGrams,
+      lengthCm:
+        typeof data.lengthCm === "number" && data.lengthCm > 0
+          ? data.lengthCm
+          : DEFAULT_SHIPPING_SETTINGS.lengthCm,
+      breadthCm:
+        typeof data.breadthCm === "number" && data.breadthCm > 0
+          ? data.breadthCm
+          : DEFAULT_SHIPPING_SETTINGS.breadthCm,
+      heightCm:
+        typeof data.heightCm === "number" && data.heightCm > 0
+          ? data.heightCm
+          : DEFAULT_SHIPPING_SETTINGS.heightCm,
+      freeShippingThreshold:
+        typeof data.freeShippingThreshold === "number" && data.freeShippingThreshold >= 0
+          ? data.freeShippingThreshold
+          : DEFAULT_SHIPPING_SETTINGS.freeShippingThreshold,
+      flatExtraHandlingFee:
+        typeof data.flatExtraHandlingFee === "number" && data.flatExtraHandlingFee >= 0
+          ? data.flatExtraHandlingFee
+          : 0,
     };
   } catch (err) {
-    console.warn("[SHIPPING ENGINE] Falling back to default settings:", err);
+    console.warn("[SHIPPING ENGINE] Failed to read settings/shipping from Firestore, using defaults:", err);
     return DEFAULT_SHIPPING_SETTINGS;
   }
 }
 
 /**
- * Calculates authoritative chargeable package weight in grams.
- * Rule: Max(Dead Weight, Volumetric Weight)
- * Volumetric Weight (kg) = (Length × Breadth × Height) / 5000
+ * Resolves the server-side Delhivery API Token from environment variables.
+ * Never exposed to the browser.
  */
-export function calculateChargeableWeightGrams(
-  totalItemQuantity: number,
-  settings: ShippingSettingsSnapshot
-): {
-  deadWeightGrams: number;
-  volumetricWeightGrams: number;
-  chargeableWeightGrams: number;
-  dimensionsCm: { length: number; breadth: number; height: number };
-} {
-  const quantity = Math.max(1, totalItemQuantity);
-
-  // Scaled dead weight
-  const deadWeightGrams =
-    quantity * settings.defaultPackageWeightGrams + settings.additionalPackagingWeightGrams;
-
-  // Scaled package height based on quantity of folded sarees
-  const effectiveHeight = Math.min(60, settings.parcelHeightCm + (quantity - 1) * 3);
-
-  const volKg = (settings.parcelLengthCm * settings.parcelBreadthCm * effectiveHeight) / 5000;
-  const volumetricWeightGrams = Math.round(volKg * 1000);
-
-  const chargeableWeightGrams = Math.max(deadWeightGrams, volumetricWeightGrams);
-
-  return {
-    deadWeightGrams,
-    volumetricWeightGrams,
-    chargeableWeightGrams,
-    dimensionsCm: {
-      length: settings.parcelLengthCm,
-      breadth: settings.parcelBreadthCm,
-      height: effectiveHeight,
-    },
-  };
+function getDelhiveryToken(): string {
+  return (
+    process.env.DELHIVERY_TOKEN ||
+    process.env.DELHIVERY_API_TOKEN ||
+    process.env.DELHIVERY_API_KEY ||
+    ""
+  ).trim();
 }
 
 /**
- * Calculates delivery rate for a destination PIN code.
+ * Calculates shipping rate for a given destination 6-digit PIN code, mode ("S" or "E"), and item count.
+ * Strictly queries Delhivery API — NEVER invents a ₹150 or ₹0 fallback.
  */
-export async function calculateShippingRate(params: {
-  destinationPincode: string;
-  totalQuantity?: number;
-  orderSubtotal?: number;
-}): Promise<ShippingRateCalculationResult> {
-  const { destinationPincode, totalQuantity = 1 } = params;
-
-  // 1. Validate PIN
-  const cleanDestPin = String(destinationPincode || "").replace(/\D/g, "");
-  if (cleanDestPin.length !== 6) {
-    throw new Error("Invalid destination PIN code. Must be exactly 6 digits.");
+export async function calculateShippingRate(
+  input: ShippingRateCalculationInput
+): Promise<ShippingRateCalculationResult> {
+  const cleanDestPin = (input.destinationPincode || "").replace(/\D/g, "");
+  if (!/^\d{6}$/.test(cleanDestPin)) {
+    throw new ShippingCalculationError(
+      "Please enter a valid six-digit delivery PIN code.",
+      "INVALID_PINCODE",
+      400
+    );
   }
 
-  // 2. Load authoritative settings
-  const settings = await getAuthoritativeShippingSettings();
-  const originPin = (process.env.ORIGIN_PINCODE || settings.originPincode || "560064").trim();
+  const settings = await getShippingSettings();
+  const requestedMode: "S" | "E" =
+    input.shippingMode === "E" || input.shippingMode === "S"
+      ? input.shippingMode
+      : settings.shippingMode;
 
-  // 3. Weight calculation
-  const weightCalc = calculateChargeableWeightGrams(totalQuantity, settings);
-
-  // 4. If live calculator is disabled, use configured fallback
-  if (!settings.liveCalculatorEnabled) {
-    return {
-      serviceable: true,
-      shippingFee: settings.fallbackShippingFee,
-      originPincode: originPin,
-      destinationPincode: cleanDestPin,
-      shippingMode: settings.shippingMode,
-      chargeableWeightGrams: weightCalc.chargeableWeightGrams,
-      dimensionsCm: weightCalc.dimensionsCm,
-      quoteSource: "configured_fallback",
-      message: "Standard flat delivery fee applied.",
-    };
+  if (requestedMode === "E" && !settings.expressEnabled) {
+    throw new ShippingCalculationError(
+      "Delhivery Express delivery is not currently enabled. Please select Normal (Surface) delivery.",
+      "MODE_DISABLED",
+      400
+    );
+  }
+  if (requestedMode === "S" && !settings.surfaceEnabled) {
+    throw new ShippingCalculationError(
+      "Delhivery Surface delivery is not currently enabled. Please select Express delivery.",
+      "MODE_DISABLED",
+      400
+    );
   }
 
-  // 5. Query Delhivery API if DELHIVERY_TOKEN is configured
-  const delhiveryToken = process.env.DELHIVERY_TOKEN?.trim();
-  const apiBaseUrl = (
-    process.env.DELHIVERY_API_BASE_URL?.trim() ||
-    "https://track.delhivery.com"
-  ).replace(/\/$/, "");
+  const modeLabel = requestedMode === "E" ? "Express Delivery" : "Normal Delivery (Surface)";
 
-  if (delhiveryToken) {
-    try {
-      // Official Delhivery Kinko invoice charges endpoint:
-      // GET https://track.delhivery.com/api/kinko/v1/invoice/charges/.json?md=S&ss=Delivered&d_pin=...&o_pin=...&cgm=...&pt=Pre-paid
-      const url = new URL(`${apiBaseUrl}/api/kinko/v1/invoice/charges/.json`);
-      url.searchParams.set("md", settings.shippingMode); // S or E
-      url.searchParams.set("ss", "Delivered");
-      url.searchParams.set("d_pin", cleanDestPin);
-      url.searchParams.set("o_pin", originPin);
-      url.searchParams.set("cgm", String(weightCalc.chargeableWeightGrams));
-      url.searchParams.set("pt", "Pre-paid");
+  const qty = Math.max(1, Math.round(input.totalQuantity || 1));
+  const actualWeightGrams =
+    qty * settings.defaultSareeWeightGrams + settings.packagingWeightGrams;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
-
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        headers: {
-          Authorization: `Token ${delhiveryToken}`,
-          Accept: "application/json",
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        const data = await res.json();
-        // Delhivery response format is an array of rate charge objects
-        // e.g. [{ total_amount: 142.0, status: "SUCCESS", ... }]
-        const chargeObj = Array.isArray(data) ? data[0] : data;
-        const totalAmount = chargeObj?.total_amount || chargeObj?.total_charge;
-
-        if (typeof totalAmount === "number" && totalAmount > 0) {
-          return {
-            serviceable: true,
-            shippingFee: Math.ceil(totalAmount),
-            originPincode: originPin,
-            destinationPincode: cleanDestPin,
-            shippingMode: settings.shippingMode,
-            chargeableWeightGrams: weightCalc.chargeableWeightGrams,
-            dimensionsCm: weightCalc.dimensionsCm,
-            quoteSource: "delhivery",
-            providerReference: chargeObj?.charge_id || undefined,
-            message: "Live courier rate calculated via Delhivery logistics network.",
-          };
-        }
-      } else {
-        console.warn(`[DELHIVERY API NON-OK]: Status ${res.status}`);
-      }
-    } catch (apiErr: any) {
-      console.warn("[DELHIVERY API ESTIMATE ERROR]:", apiErr.message);
-    }
-  }
-
-  // 6. Safe Fallback handling
-  if (settings.allowFallbackOnFailure) {
-    return {
-      serviceable: true,
-      shippingFee: settings.fallbackShippingFee,
-      originPincode: originPin,
-      destinationPincode: cleanDestPin,
-      shippingMode: settings.shippingMode,
-      chargeableWeightGrams: weightCalc.chargeableWeightGrams,
-      dimensionsCm: weightCalc.dimensionsCm,
-      quoteSource: "configured_fallback",
-      message: delhiveryToken
-        ? "Standard express shipping rate applied (live gateway quote pending)."
-        : "Standard express delivery rate applied.",
-    };
-  }
-
-  throw new Error(
-    "Destination PIN code could not be verified with live courier logistics and fallback is disabled."
+  // Volumetric weight in grams: (L * B * H) / 5000 * 1000 => (L * B * H) / 5
+  const totalHeightCm = settings.heightCm * Math.min(qty, 5);
+  const volumetricWeightGrams = Math.round(
+    (settings.lengthCm * settings.breadthCm * totalHeightCm) / 5
   );
+
+  const chargeableWeightGrams = Math.max(actualWeightGrams, volumetricWeightGrams, 500);
+
+  const dimensionsCm = {
+    length: settings.lengthCm,
+    breadth: settings.breadthCm,
+    height: totalHeightCm,
+  };
+
+  const delhiveryToken = getDelhiveryToken();
+  const isStaging =
+    process.env.DELHIVERY_ENV === "staging" || settings.environment === "staging";
+  const baseUrl = isStaging
+    ? "https://staging-express.delhivery.com"
+    : "https://track.delhivery.com";
+
+  if (!delhiveryToken) {
+    console.error("[DELHIVERY SHIPPING] DELHIVERY_TOKEN environment variable is missing on the server.");
+    throw new ShippingCalculationError(
+      "We couldn't calculate the shipping charge right now. Please try again.",
+      "DELHIVERY_UNAVAILABLE",
+      503
+    );
+  }
+
+  // 1. Check PIN Code Serviceability
+  try {
+    const pinUrl = `${baseUrl}/c/api/pin-codes/json/?filter_codes=${encodeURIComponent(cleanDestPin)}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const pinRes = await fetch(pinUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Token ${delhiveryToken}`,
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    clearTimeout(timeout);
+
+    if (!pinRes.ok) {
+      console.error(`[DELHIVERY PIN CHECK] HTTP ${pinRes.status} for PIN ${cleanDestPin}`);
+      throw new ShippingCalculationError(
+        "We couldn't calculate the shipping charge right now. Please try again.",
+        "DELHIVERY_UNAVAILABLE",
+        502
+      );
+    }
+
+    const pinData = await pinRes.json();
+    const codes = Array.isArray(pinData?.delivery_codes) ? pinData.delivery_codes : [];
+
+    if (codes.length === 0) {
+      throw new ShippingCalculationError(
+        "Delhivery does not currently service this destination for the selected delivery method.",
+        "UNSERVICEABLE",
+        400
+      );
+    }
+
+    const postalInfo = codes[0]?.postal_code;
+    if (postalInfo && postalInfo.pre_paid === "N") {
+      throw new ShippingCalculationError(
+        "Delhivery does not currently service this destination for the selected delivery method.",
+        "UNSERVICEABLE",
+        400
+      );
+    }
+  } catch (err: any) {
+    if (err instanceof ShippingCalculationError) {
+      throw err;
+    }
+    console.error("[DELHIVERY PIN CHECK ERROR]:", err?.message || err);
+    throw new ShippingCalculationError(
+      "We couldn't calculate the shipping charge right now. Please try again.",
+      "DELHIVERY_UNAVAILABLE",
+      502
+    );
+  }
+
+  // 2. Fetch Live Delhivery Kinko Invoice Charges for Selected Mode (E or S)
+  try {
+    const rateParams = new URLSearchParams({
+      md: requestedMode,
+      ss: "Delivered",
+      d_pin: cleanDestPin,
+      o_pin: settings.originPincode,
+      cgm: String(chargeableWeightGrams),
+      pt: settings.paymentType,
+    });
+
+    const rateUrl = `${baseUrl}/api/kinko/v1/invoice/charges/.json?${rateParams.toString()}`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const rateRes = await fetch(rateUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Token ${delhiveryToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    clearTimeout(timeout);
+
+    if (!rateRes.ok) {
+      console.error(
+        `[DELHIVERY RATE API] HTTP ${rateRes.status} for o_pin=${settings.originPincode}, d_pin=${cleanDestPin}, md=${requestedMode}, cgm=${chargeableWeightGrams}`
+      );
+      throw new ShippingCalculationError(
+        "We couldn't calculate the shipping charge right now. Please try again.",
+        "DELHIVERY_UNAVAILABLE",
+        502
+      );
+    }
+
+    const rateData = await rateRes.json();
+    const quoteEntry = Array.isArray(rateData) ? rateData[0] : rateData;
+    const rawTotal =
+      quoteEntry?.total_amount ??
+      quoteEntry?.totalAmount ??
+      quoteEntry?.charge_total;
+
+    const totalCharge = Number(rawTotal);
+
+    if (!Number.isFinite(totalCharge) || totalCharge <= 0) {
+      console.warn(
+        `[DELHIVERY RATE API] Non-positive or missing total_amount for d_pin=${cleanDestPin}, md=${requestedMode}:`,
+        quoteEntry
+      );
+      throw new ShippingCalculationError(
+        "Delhivery does not currently service this destination for the selected delivery method.",
+        "UNSERVICEABLE",
+        400
+      );
+    }
+
+    const finalFee = Math.round(totalCharge + (settings.flatExtraHandlingFee || 0));
+
+    return {
+      serviceable: true,
+      shippingFee: finalFee,
+      originPincode: settings.originPincode,
+      destinationPincode: cleanDestPin,
+      shippingMode: requestedMode,
+      shippingModeLabel: modeLabel,
+      chargeableWeightGrams,
+      dimensionsCm,
+      quoteSource: "delhivery",
+      providerReference: `DLV-${requestedMode}-${cleanDestPin}-${chargeableWeightGrams}g`,
+      message: `Delhivery ${requestedMode === "E" ? "Express" : "Surface"} Delivery to ${cleanDestPin}`,
+      supportedModes: {
+        surface: settings.surfaceEnabled,
+        express: settings.expressEnabled,
+        defaultMode: settings.shippingMode,
+      },
+    };
+  } catch (err: any) {
+    if (err instanceof ShippingCalculationError) {
+      throw err;
+    }
+    console.error("[DELHIVERY RATE API ERROR]:", err?.message || err);
+    throw new ShippingCalculationError(
+      "We couldn't calculate the shipping charge right now. Please try again.",
+      "DELHIVERY_UNAVAILABLE",
+      502
+    );
+  }
 }

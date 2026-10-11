@@ -159,6 +159,7 @@ export function mapDocToProduct(id: string, data: Record<string, any>): NekaraPr
     color: data.color || "",
     occasion: data.occasion || "",
     weave: data.weave || "",
+    weavingType: data.weavingType === "Handloom" ? "Handloom" : "Powerloom",
     collection: data.collection || "",
     stock,
     rating: 4.9,

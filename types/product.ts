@@ -27,6 +27,7 @@ export interface NekaraProduct {
   color?: string;
   occasion?: string;
   weave?: string;
+  weavingType?: "Powerloom" | "Handloom";
   collection?: string;
   stock: number;
   rating: number;

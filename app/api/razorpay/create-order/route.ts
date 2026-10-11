@@ -17,6 +17,8 @@ interface CreateOrderRequestBody {
     quantity: number;
   }>;
   shippingAddress?: ShippingAddress;
+  shippingMode?: "S" | "E";
+  expectedShippingFee?: number;
 }
 
 export async function POST(req: NextRequest) {
@@ -35,8 +37,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body: CreateOrderRequestBody = await req.json();
-    const { userId } = body;
-    let { items, shippingAddress } = body;
+    const { userId, expectedShippingFee } = body;
+    let { items, shippingAddress, shippingMode } = body;
 
     // Authenticate user via Bearer token if provided, falling back to body.userId
     let authenticatedUserId = userId;
@@ -111,6 +113,9 @@ export async function POST(req: NextRequest) {
       }
       if (!shippingAddress) {
         shippingAddress = existingOrderData.shippingAddress;
+      }
+      if (!shippingMode && existingOrderData?.shippingQuote?.shippingMode) {
+        shippingMode = existingOrderData.shippingQuote.shippingMode;
       }
     }
 
@@ -217,11 +222,12 @@ export async function POST(req: NextRequest) {
 
     if (destinationPin.length !== 6) {
       return NextResponse.json(
-        { error: "A valid 6-digit destination postal PIN code is required to compute shipping." },
+        { error: "Please enter a valid six-digit delivery PIN code." },
         { status: 400 }
       );
     }
 
+    const normalizedMode: "S" | "E" = shippingMode === "E" ? "E" : "S";
     const totalQuantity = enrichedItems.reduce((acc, curr) => acc + (curr.quantity || 1), 0);
 
     let shippingRateResult: ShippingRateCalculationResult | null = null;
@@ -230,16 +236,48 @@ export async function POST(req: NextRequest) {
     try {
       shippingRateResult = await calculateShippingRate({
         destinationPincode: destinationPin,
+        shippingMode: normalizedMode,
         totalQuantity,
         orderSubtotal: serverTotalAmount,
       });
-      if (shippingRateResult && typeof shippingRateResult.shippingFee === "number") {
-        authoritativeShippingFee = shippingRateResult.shippingFee;
+
+      if (
+        !shippingRateResult ||
+        !shippingRateResult.serviceable ||
+        typeof shippingRateResult.shippingFee !== "number" ||
+        shippingRateResult.shippingFee <= 0
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Delhivery does not currently service this destination for the selected delivery method.",
+          },
+          { status: 400 }
+        );
+      }
+
+      authoritativeShippingFee = shippingRateResult.shippingFee;
+
+      if (
+        typeof expectedShippingFee === "number" &&
+        Math.round(expectedShippingFee) !== Math.round(authoritativeShippingFee)
+      ) {
+        return NextResponse.json(
+          {
+            error: `Shipping rate updated to ₹${authoritativeShippingFee} for ${shippingRateResult.shippingModeLabel}. Please review the updated total and proceed again.`,
+            updatedShippingFee: authoritativeShippingFee,
+          },
+          { status: 409 }
+        );
       }
     } catch (shipErr: any) {
       console.error("[CREATE ORDER] Shipping calculation error:", shipErr?.message || shipErr);
       return NextResponse.json(
-        { error: "Failed to verify delivery rates for destination PIN code. Please retry." },
+        {
+          error:
+            shipErr?.message ||
+            "We couldn't calculate the shipping charge right now. Please try again.",
+        },
         { status: 400 }
       );
     }
@@ -323,6 +361,8 @@ export async function POST(req: NextRequest) {
         processingFeeBase: String(breakdown.processingFeeBase),
         processingFeeGST: String(breakdown.processingFeeGST),
         shippingFee: String(authoritativeShippingFee),
+        shippingMode: shippingRateResult.shippingMode,
+        destinationPincode: shippingRateResult.destinationPincode,
       },
     });
 
@@ -358,17 +398,21 @@ export async function POST(req: NextRequest) {
       paymentProcessingFeeBase: breakdown.processingFeeBase,
       paymentProcessingFeeGST: breakdown.processingFeeGST,
       shippingFee: authoritativeShippingFee,
+      shippingMode: shippingRateResult.shippingMode,
       shippingQuote: shippingRateResult
         ? {
             serviceable: shippingRateResult.serviceable,
             shippingFee: shippingRateResult.shippingFee,
+            quotedAmount: shippingRateResult.shippingFee,
             originPincode: shippingRateResult.originPincode,
             destinationPincode: shippingRateResult.destinationPincode,
             shippingMode: shippingRateResult.shippingMode,
+            shippingModeLabel: shippingRateResult.shippingModeLabel,
             chargeableWeightGrams: shippingRateResult.chargeableWeightGrams,
             dimensionsCm: shippingRateResult.dimensionsCm,
             quoteSource: shippingRateResult.quoteSource,
             providerReference: shippingRateResult.providerReference || null,
+            quotedAt: FieldValue.serverTimestamp(),
           }
         : null,
       shippingAddress: {

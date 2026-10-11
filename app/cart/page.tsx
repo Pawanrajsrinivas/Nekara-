@@ -80,82 +80,129 @@ export default function CartPage() {
 
   // Shipping calculation state machine: 'idle' | 'calculating' | 'success' | 'error' | 'stale'
   type ShippingCalcState = "idle" | "calculating" | "success" | "error" | "stale";
+  const [shippingMode, setShippingMode] = useState<"S" | "E">("S");
   const [shippingState, setShippingState] = useState<ShippingCalcState>("idle");
   const [shippingFee, setShippingFee] = useState<number>(0);
   const [shippingErrorMessage, setShippingErrorMessage] = useState<string | null>(null);
   const [shippingQuoteInfo, setShippingQuoteInfo] = useState<{
     quoteSource?: string;
     message?: string;
+    destinationPincode?: string;
+    shippingMode?: "S" | "E";
+    shippingModeLabel?: string;
   } | null>(null);
 
-  // Authoritative payment fee calculation for customer preview with shipping fee
-  const breakdown = calculatePaymentBreakdown(totalAmount, undefined, shippingFee);
+  // Authoritative payment fee calculation for customer preview with shipping fee (only include shippingFee when quote is valid)
+  const effectiveShippingFee = shippingState === "success" && shippingFee > 0 ? shippingFee : 0;
+  const breakdown = calculatePaymentBreakdown(totalAmount, undefined, effectiveShippingFee);
 
-  // Shipping rate fetch with abort controller & request counter to prevent stale race conditions
+  // Shipping rate fetch with request counter to prevent stale race conditions
   const shippingReqCounter = React.useRef(0);
 
-  const calculateShippingForPin = useCallback(async (pin: string) => {
-    const cleanPin = pin.replace(/\D/g, "");
-    if (cleanPin.length !== 6) {
-      setShippingState("idle");
-      setShippingFee(0);
-      setShippingQuoteInfo(null);
-      setShippingErrorMessage(null);
-      return;
-    }
-
-    const currentReq = ++shippingReqCounter.current;
-    setShippingState("calculating");
-    setShippingErrorMessage(null);
-
-    try {
-      const res = await fetch("/api/get-shipping-rate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          postalCode: cleanPin,
-          quantity: totalItems || 1,
-          subtotal: totalAmount,
-        }),
-      });
-
-      // Discard response if superseded by a newer request
-      if (currentReq !== shippingReqCounter.current) return;
-
-      const data = await res.json();
-      if (!res.ok || !data || !data.success || typeof data.shippingFee !== "number") {
-        setShippingState("error");
-        setShippingErrorMessage(data?.message || data?.error || "Unable to calculate delivery charges for this PIN code.");
+  const calculateShippingForPin = useCallback(
+    async (pin: string, modeToUse: "S" | "E" = shippingMode) => {
+      const cleanPin = pin.replace(/\D/g, "");
+      if (cleanPin.length !== 6) {
+        setShippingState("idle");
+        setShippingFee(0);
+        setShippingQuoteInfo(null);
+        setShippingErrorMessage(
+          cleanPin.length > 0 ? "Please enter a valid six-digit delivery PIN code." : null
+        );
         return;
       }
 
-      setShippingFee(data.shippingFee);
-      setShippingQuoteInfo({
-        quoteSource: data.quoteSource,
-        message: data.message,
-      });
-      setShippingState("success");
+      const currentReq = ++shippingReqCounter.current;
+      // Immediately invalidate previous quote while calculating
+      setShippingState("calculating");
+      setShippingFee(0);
+      setShippingQuoteInfo(null);
       setShippingErrorMessage(null);
-    } catch (err: any) {
-      if (currentReq !== shippingReqCounter.current) return;
-      console.warn("[CHECKOUT SHIPPING RATE ERROR]:", err);
-      setShippingState("error");
-      setShippingErrorMessage(err.message || "Failed to calculate delivery fee. Please retry.");
-    }
-  }, [totalItems, totalAmount]);
 
-  // Trigger recalculation on PIN change or cart total change
+      try {
+        const res = await fetch("/api/get-shipping-rate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            postalCode: cleanPin,
+            shippingMode: modeToUse,
+            quantity: totalItems || 1,
+            subtotal: totalAmount,
+          }),
+        });
+
+        // Discard response if superseded by a newer request
+        if (currentReq !== shippingReqCounter.current) return;
+
+        const data = await res.json();
+        if (
+          !res.ok ||
+          !data ||
+          !data.success ||
+          !data.serviceable ||
+          typeof data.shippingFee !== "number" ||
+          data.shippingFee <= 0
+        ) {
+          setShippingState("error");
+          setShippingFee(0);
+          setShippingQuoteInfo(null);
+          setShippingErrorMessage(
+            data?.message ||
+              data?.error ||
+              "We couldn't calculate the shipping charge right now. Please try again."
+          );
+          return;
+        }
+
+        setShippingFee(data.shippingFee);
+        setShippingQuoteInfo({
+          quoteSource: data.quoteSource,
+          message: data.message,
+          destinationPincode: cleanPin,
+          shippingMode: data.shippingMode || modeToUse,
+          shippingModeLabel:
+            data.shippingModeLabel ||
+            (modeToUse === "E" ? "Express Delivery" : "Normal Delivery (Surface)"),
+        });
+        setShippingState("success");
+        setShippingErrorMessage(null);
+      } catch (err: any) {
+        if (currentReq !== shippingReqCounter.current) return;
+        console.warn("[CHECKOUT SHIPPING RATE ERROR]:", err);
+        setShippingState("error");
+        setShippingFee(0);
+        setShippingQuoteInfo(null);
+        setShippingErrorMessage(
+          "We couldn't calculate the shipping charge right now. Please try again."
+        );
+      }
+    },
+    [totalItems, totalAmount, shippingMode]
+  );
+
+  // Trigger recalculation on PIN change, shipping mode change, or cart total change
   useEffect(() => {
     const cleanPin = shippingAddress.postalCode.replace(/\D/g, "");
     if (cleanPin.length === 6) {
-      calculateShippingForPin(cleanPin);
+      calculateShippingForPin(cleanPin, shippingMode);
     } else {
       setShippingState("idle");
       setShippingFee(0);
       setShippingQuoteInfo(null);
-      setShippingErrorMessage(null);
+      setShippingErrorMessage(
+        cleanPin.length > 0 ? "Please enter a valid six-digit delivery PIN code." : null
+      );
     }
-  }, [shippingAddress.postalCode, calculateShippingForPin]);
+  }, [shippingAddress.postalCode, shippingMode, calculateShippingForPin]);
+
+  const handleShippingModeChange = (newMode: "S" | "E") => {
+    if (newMode === shippingMode) return;
+    // Immediately invalidate previous quote before switching mode
+    setShippingFee(0);
+    setShippingQuoteInfo(null);
+    setShippingErrorMessage(null);
+    setShippingMode(newMode);
+  };
 
   // Pre-fill customer details from profile / auth when available
   useEffect(() => {
@@ -209,18 +256,31 @@ export default function CartPage() {
       (item.stock <= 0 || item.quantity > item.stock)
   );
 
+  const cleanCurrentPin = shippingAddress.postalCode.replace(/\D/g, "");
+  const isShippingQuoteValid =
+    shippingState === "success" &&
+    shippingFee > 0 &&
+    cleanCurrentPin.length === 6 &&
+    shippingQuoteInfo?.destinationPincode === cleanCurrentPin &&
+    shippingQuoteInfo?.shippingMode === shippingMode;
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    if (name === "postalCode") {
+      const digitsOnly = value.replace(/\D/g, "").slice(0, 6);
+      setShippingAddress((prev) => ({ ...prev, postalCode: digitsOnly }));
+      return;
+    }
     setShippingAddress((prev) => ({ ...prev, [name]: value }));
   };
 
   /**
    * Handle Razorpay Standard Web Checkout
-   * 1. Validates delivery details
+   * 1. Validates delivery details & live Delhivery shipping quote
    * 2. Pre-loads Razorpay checkout script
-   * 3. Creates server-side Razorpay order (verifying live stock & price)
+   * 3. Creates server-side Razorpay order (verifying live stock, PIN, mode & price)
    * 4. Opens Razorpay modal
    * 5. Verifies HMAC-SHA256 signature server-side
    * 6. Atomically decrements stock and redirects to order confirmation
@@ -257,25 +317,25 @@ export default function CartPage() {
     }
     const cleanPin = shippingAddress.postalCode.replace(/\D/g, "");
     if (!cleanPin || cleanPin.length !== 6) {
-      setPaymentAlert({ type: "error", message: "Please enter a valid 6-digit postal PIN code." });
+      setPaymentAlert({ type: "error", message: "Please enter a valid six-digit delivery PIN code." });
       return;
     }
 
-    // Explicit Checkout Payment Lock: Require completed shipping calculation
+    // Explicit Checkout Payment Lock: Require completed shipping calculation for current PIN & mode
     if (shippingState === "calculating") {
       setPaymentAlert({
         type: "error",
-        message: "Calculating delivery charges. Please wait a moment...",
+        message: "Calculating shipping... Please wait a moment.",
       });
       return;
     }
 
-    if (shippingState !== "success") {
+    if (!isShippingQuoteValid) {
       setPaymentAlert({
         type: "error",
         message:
           shippingErrorMessage ||
-          "Valid shipping calculation required before proceeding. Please enter a valid 6-digit PIN code and verify delivery rates.",
+          "We couldn't calculate the shipping charge right now. Please try again.",
       });
       return;
     }
@@ -293,7 +353,7 @@ export default function CartPage() {
       }
 
       // 2. Call server endpoint to validate live inventory & create Razorpay order
-      setPaymentStepText("Validating stock & preparing order...");
+      setPaymentStepText("Validating stock, shipping & preparing order...");
       const fullDeliveryAddress = [
         shippingAddress.house.trim(),
         shippingAddress.area.trim(),
@@ -324,6 +384,8 @@ export default function CartPage() {
         userId: user.uid,
         items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
         shippingAddress: structuredAddress,
+        shippingMode,
+        expectedShippingFee: shippingFee,
       };
 
       const idToken = user ? await user.getIdToken().catch(() => null) : null;
@@ -926,6 +988,7 @@ export default function CartPage() {
                           <input
                             type="text"
                             name="postalCode"
+                            inputMode="numeric"
                             required
                             maxLength={6}
                             value={shippingAddress.postalCode}
@@ -933,6 +996,78 @@ export default function CartPage() {
                             placeholder="e.g. 560001"
                             className="w-full px-3.5 py-2.5 bg-[#FAF6F0] border border-[#B58A45]/30 rounded-xs text-xs text-[#241A15] focus:outline-none focus:border-[#075E5A]"
                           />
+                        </div>
+                      </div>
+
+                      {/* Delhivery Delivery Mode Selection: Normal (Surface) vs Express */}
+                      <div className="pt-2">
+                        <label className="block text-xs font-medium text-[#241A15] mb-2">
+                          Delivery Speed &amp; Method (Delhivery Insured Transit) *
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <button
+                            type="button"
+                            onClick={() => handleShippingModeChange("S")}
+                            className={cn(
+                              "p-3.5 rounded-xs border text-left transition-all flex items-start justify-between gap-2 cursor-pointer",
+                              shippingMode === "S"
+                                ? "bg-[#02221D]/5 border-[#075E5A] ring-1 ring-[#075E5A]"
+                                : "bg-[#FAF6F0] border-[#B58A45]/30 hover:border-[#B58A45]"
+                            )}
+                          >
+                            <div>
+                              <span className="text-xs font-semibold text-[#241A15] block">
+                                Normal Delivery (Surface)
+                              </span>
+                              <span className="text-[11px] text-[#3A2115]/65 block mt-0.5">
+                                Standard surface transit • 4–7 business days
+                              </span>
+                            </div>
+                            <span
+                              className={cn(
+                                "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                                shippingMode === "S"
+                                  ? "border-[#075E5A] bg-[#075E5A]"
+                                  : "border-[#B58A45]/50"
+                              )}
+                            >
+                              {shippingMode === "S" && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#FAF5ED]" />
+                              )}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleShippingModeChange("E")}
+                            className={cn(
+                              "p-3.5 rounded-xs border text-left transition-all flex items-start justify-between gap-2 cursor-pointer",
+                              shippingMode === "E"
+                                ? "bg-[#02221D]/5 border-[#075E5A] ring-1 ring-[#075E5A]"
+                                : "bg-[#FAF6F0] border-[#B58A45]/30 hover:border-[#B58A45]"
+                            )}
+                          >
+                            <div>
+                              <span className="text-xs font-semibold text-[#241A15] block">
+                                Express Delivery
+                              </span>
+                              <span className="text-[11px] text-[#3A2115]/65 block mt-0.5">
+                                Priority air/express transit • 2–4 business days
+                              </span>
+                            </div>
+                            <span
+                              className={cn(
+                                "w-4 h-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5",
+                                shippingMode === "E"
+                                  ? "border-[#075E5A] bg-[#075E5A]"
+                                  : "border-[#B58A45]/50"
+                              )}
+                            >
+                              {shippingMode === "E" && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#FAF5ED]" />
+                              )}
+                            </span>
+                          </button>
                         </div>
                       </div>
                     </form>
@@ -983,8 +1118,11 @@ export default function CartPage() {
 
                   <div className="flex items-center justify-between text-xs text-[#3A2115]/80">
                     <div className="flex flex-col">
-                      <span>Insured Delivery</span>
-                      {shippingQuoteInfo?.message && (
+                      <span>
+                        Insured Delivery (
+                        {shippingMode === "E" ? "Express" : "Normal Surface"})
+                      </span>
+                      {isShippingQuoteValid && shippingQuoteInfo?.message && (
                         <span className="text-[10px] text-[#3A2115]/50">
                           {shippingQuoteInfo.message}
                         </span>
@@ -997,42 +1135,45 @@ export default function CartPage() {
                       </span>
                     ) : shippingState === "error" ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-rose-700 font-medium">Calculation error</span>
+                        <span className="text-[11px] text-rose-700 font-medium">Unavailable</span>
                         <button
                           type="button"
-                          onClick={() => calculateShippingForPin(shippingAddress.postalCode)}
+                          onClick={() => calculateShippingForPin(shippingAddress.postalCode, shippingMode)}
                           className="text-[10px] text-[#075E5A] hover:underline font-bold"
                         >
                           Retry
                         </button>
                       </div>
-                    ) : shippingState === "success" ? (
-                      shippingFee > 0 ? (
-                        <span className="font-medium text-[#241A15]">
-                          {formatINR(shippingFee)}
-                        </span>
-                      ) : (
-                        <span className="text-[#075E5A] font-medium">Complimentary</span>
-                      )
+                    ) : isShippingQuoteValid ? (
+                      <span className="font-medium text-[#241A15]">
+                        {formatINR(shippingFee)}
+                      </span>
                     ) : (
                       <span className="text-[11px] text-[#3A2115]/50 italic">
-                        Fill the the checkout for Delivery Fee
+                        {cleanCurrentPin.length > 0 && cleanCurrentPin.length < 6
+                          ? "Enter 6-digit PIN code"
+                          : "Fill checkout PIN for Delivery Fee"}
                       </span>
                     )}
                   </div>
 
-                  {shippingState === "error" && shippingErrorMessage && (
-                    <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xs text-[11px] text-rose-800 flex items-center justify-between">
-                      <span>{shippingErrorMessage}</span>
-                      <button
-                        type="button"
-                        onClick={() => calculateShippingForPin(shippingAddress.postalCode)}
-                        className="text-[#075E5A] hover:underline font-semibold ml-2 shrink-0"
-                      >
-                        Retry Calculation
-                      </button>
-                    </div>
-                  )}
+                  {(shippingState === "error" || (cleanCurrentPin.length > 0 && cleanCurrentPin.length < 6)) &&
+                    shippingErrorMessage && (
+                      <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xs text-[11px] text-rose-800 flex items-center justify-between gap-2">
+                        <span>{shippingErrorMessage}</span>
+                        {cleanCurrentPin.length === 6 && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              calculateShippingForPin(shippingAddress.postalCode, shippingMode)
+                            }
+                            className="text-[#075E5A] hover:underline font-semibold shrink-0"
+                          >
+                            Retry
+                          </button>
+                        )}
+                      </div>
+                    )}
 
                   <div className="flex items-center justify-between text-[11px] text-[#3A2115]/60">
                     <span>Applicable Taxes</span>
@@ -1073,15 +1214,15 @@ export default function CartPage() {
                     <span aria-hidden="true">→</span>
                   </button>
                 ) : (
-                  /* Step 2 CTA: Pay via Razorpay - LOCKED until shippingState === 'success' */
+                  /* Step 2 CTA: Pay via Razorpay - LOCKED until isShippingQuoteValid */
                   <div className="space-y-3">
                     <button
                       type="submit"
                       form="checkout-shipping-form"
-                      disabled={hasStockIssue || isPaymentLoading || shippingState !== "success"}
+                      disabled={hasStockIssue || isPaymentLoading || !isShippingQuoteValid}
                       className={cn(
                         "w-full h-12 rounded-xs font-sans font-semibold text-xs tracking-[0.18em] uppercase transition-all duration-300 shadow-sm flex items-center justify-center gap-2 min-h-[44px]",
-                        hasStockIssue || isPaymentLoading || shippingState !== "success"
+                        hasStockIssue || isPaymentLoading || !isShippingQuoteValid
                           ? "bg-stone-300 text-stone-500 cursor-not-allowed opacity-80"
                           : "bg-[#02221D] hover:bg-[#075E5A] text-[#FAF5ED] hover:shadow-md cursor-pointer"
                       )}
@@ -1094,10 +1235,14 @@ export default function CartPage() {
                       ) : shippingState === "calculating" ? (
                         <>
                           <div className="w-4 h-4 border-2 border-stone-500 border-t-transparent rounded-full animate-spin" />
-                          <span>Calculating Shipping Charges...</span>
+                          <span>Calculating shipping...</span>
                         </>
-                      ) : shippingState !== "success" ? (
-                        <span>Enter PIN code to unlock payment</span>
+                      ) : !isShippingQuoteValid ? (
+                        <span>
+                          {cleanCurrentPin.length !== 6
+                            ? "Enter 6-digit PIN code to unlock payment"
+                            : "Valid shipping quote required to pay"}
+                        </span>
                       ) : (
                         <>
                           <span>🔒 Pay {formatINR(breakdown.totalAmount)} via Razorpay</span>

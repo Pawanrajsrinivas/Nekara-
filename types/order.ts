@@ -23,12 +23,18 @@ export interface OrderRefundInfo {
   refundId?: string;
   amount: number;
   reason?: string;
-  status: "pending" | "processing" | "processed" | "failed";
+  status: "pending" | "processing" | "processed" | "failed" | "reported_unverified";
   method: "razorpay" | "manual";
+  source?: "razorpay_api" | "external_dashboard";
+  externalRefundReference?: string | null;
+  externalRefundDate?: string | null;
+  verifiedExternalReference?: boolean;
   notes?: string;
   refundedAt?: any;
   createdAt?: any;
   referenceId?: string;
+  processedBy?: string;
+  recordedByEmail?: string;
 }
 
 export interface OrderItem {
@@ -101,8 +107,10 @@ export interface NekaraOrder {
   paymentProcessingFeeBase?: number;
   paymentProcessingFeeGST?: number;
   shippingFee?: number;
+  shippingMode?: "S" | "E";
   shippingAddress?: ShippingAddress;
   refund?: OrderRefundInfo;
+  refundHistory?: OrderRefundInfo[];
   shipment?: OrderShipmentInfo;
   shippingQuote?: ShippingQuoteSnapshot;
   notes?: string;
@@ -131,6 +139,7 @@ export interface ShippingQuoteSnapshot {
   destinationPincode: string;
   originPincode: string;
   shippingMode: "S" | "E";
+  shippingModeLabel?: string;
   quotedAmount: number;
   quoteSource: "delhivery" | "configured_fallback";
   quotedAt: any;

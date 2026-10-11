@@ -35,7 +35,7 @@ function renderOrderBadges(order: NekaraOrder) {
     paymentBadge = (
       <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-purple-50/70 text-purple-800 border border-purple-200">
         <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
-        Refund Processing
+        {statusInfo.primaryPaymentBadgeText}
       </span>
     );
   } else if (statusInfo.primaryPaymentBadgeVariant === "refund_failed") {
@@ -283,20 +283,26 @@ export default function OrderDetailPage({ params }: PageProps) {
         </div>
 
         {/* Refund Notification Banner (Highest Priority) */}
-        {statusInfo.isRefunded && (
+        {(statusInfo.isRefunded || statusInfo.isRefundPending) && (
           <div className="bg-purple-50/90 border border-purple-200 rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
             <div className="w-8 h-8 rounded-full bg-purple-700 text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5 font-bold">
               ✓
             </div>
             <div className="flex-1">
               <h3 className="font-serif text-base font-bold text-purple-950">
-                Payment Refunded
+                {order.refund?.status === "reported_unverified"
+                  ? "Refund Reported (Verification Pending)"
+                  : statusInfo.isRefundPending
+                  ? "Refund Processing"
+                  : "Payment Refunded"}
               </h3>
               <p className="text-xs text-purple-900/80 font-sans mt-0.5 leading-relaxed">
-                This transaction has been refunded.
+                {order.refund?.status === "reported_unverified"
+                  ? "Your refund has been recorded by our concierge team and is awaiting final reference verification."
+                  : "This transaction has been refunded."}
                 {order.refund?.amount ? ` Amount: ${formatINR(order.refund.amount)}.` : ""}
-                {order.refund?.refundId ? ` Refund ID: ${order.refund.refundId}.` : ""}
-                {order.refund?.method === "razorpay"
+                {order.refund?.refundId ? ` Reference ID: ${order.refund.refundId}.` : ""}
+                {order.refund?.method === "razorpay" || order.refund?.source === "external_dashboard"
                   ? " The amount will reflect back to your original source account within 5–7 business days per banking guidelines."
                   : " Settled via direct bank transfer."}
               </p>
@@ -305,7 +311,7 @@ export default function OrderDetailPage({ params }: PageProps) {
         )}
 
         {/* Payment Confirmation Banner (Only when NOT refunded) */}
-        {!statusInfo.isRefunded && (isPaymentSuccessBanner || statusInfo.isPaid) && (
+        {!statusInfo.isRefunded && !statusInfo.isRefundPending && (isPaymentSuccessBanner || statusInfo.isPaid) && (
           <div className="bg-[#EBF5EE] border border-[#C2E3CD] rounded-xs p-4 sm:p-5 flex items-start gap-3.5 shadow-xs">
             <div className="w-8 h-8 rounded-full bg-[#064238] text-[#FAF5ED] flex items-center justify-center shrink-0 mt-0.5">
               <CheckIcon size={16} />
@@ -432,6 +438,8 @@ export default function OrderDetailPage({ params }: PageProps) {
               <span className="text-[10px] font-sans font-semibold uppercase tracking-[0.2em] text-[#B58A45] block mb-1">
                 {statusInfo.isRefunded
                   ? "ORDER REFUNDED"
+                  : statusInfo.isRefundPending
+                  ? "REFUND IN PROGRESS"
                   : statusInfo.isPaid
                   ? "PURCHASE CONFIRMATION"
                   : statusInfo.isCancelled
@@ -460,20 +468,24 @@ export default function OrderDetailPage({ params }: PageProps) {
 
           {order.refund && (
             <div className="mt-6 p-4 rounded-xs bg-purple-50/90 border border-purple-200/80 text-purple-950 font-sans space-y-1.5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-wider text-purple-900">
-                  Refund Processed ({formatINR(order.refund.amount)})
+                  {order.refund.status === "reported_unverified"
+                    ? `Refund Reported — Verification Pending (${formatINR(order.refund.amount)})`
+                    : order.refund.status === "pending" || order.refund.status === "processing"
+                    ? `Refund Processing (${formatINR(order.refund.amount)})`
+                    : `Refund Processed (${formatINR(order.refund.amount)})`}
                 </span>
-                {order.refund.refundId && (
+                {(order.refund.externalRefundReference || order.refund.refundId) && (
                   <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded-sm">
-                    {order.refund.refundId}
+                    {order.refund.externalRefundReference || order.refund.refundId}
                   </span>
                 )}
               </div>
               <p className="text-xs text-purple-900/80 leading-relaxed">
-                {order.refund.method === "razorpay"
-                  ? "Your refund has been initiated back to your original source payment method and will reflect within 5 to 7 business days per bank processing timelines."
-                  : `Your refund of ${formatINR(order.refund.amount)} has been recorded via manual banking settlement. Reference: ${order.refund.referenceId || "Direct Account Transfer"}.`}
+                {order.refund.method === "razorpay" || order.refund.source === "external_dashboard"
+                  ? "Your refund has been initiated back to your original source payment method via Razorpay and will reflect within 5 to 7 business days per bank processing timelines."
+                  : `Your refund of ${formatINR(order.refund.amount)} has been recorded via banking settlement. Reference: ${order.refund.referenceId || order.refund.refundId || "Direct Account Transfer"}.`}
               </p>
               {order.refund.reason && (
                 <p className="text-[11px] text-purple-800/70 italic">

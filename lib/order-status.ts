@@ -40,9 +40,13 @@ export function resolveOrderStatuses(order: {
     rawStatus.toUpperCase() === "REFUNDED" ||
     refundStatus === "processed";
 
+  const isRefundReportedUnverified =
+    !isRefunded && refundStatus === "reported_unverified";
+
   const isRefundPending =
     !isRefunded &&
-    (rawPaymentStatus.toUpperCase().includes("REFUND PENDING") ||
+    (isRefundReportedUnverified ||
+      rawPaymentStatus.toUpperCase().includes("REFUND PENDING") ||
       rawPaymentStatus.toUpperCase().includes("REFUND PROCESSING") ||
       refundStatus === "pending" ||
       refundStatus === "processing");
@@ -89,6 +93,9 @@ export function resolveOrderStatuses(order: {
   if (isRefunded) {
     primaryPaymentBadgeText = "Refunded";
     primaryPaymentBadgeVariant = "refunded";
+  } else if (isRefundReportedUnverified) {
+    primaryPaymentBadgeText = "Refund Reported (Verification Pending)";
+    primaryPaymentBadgeVariant = "refund_pending";
   } else if (isRefundPending) {
     primaryPaymentBadgeText = "Refund Processing";
     primaryPaymentBadgeVariant = "refund_pending";

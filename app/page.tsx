@@ -131,10 +131,7 @@ export default function HomePage() {
       {/* 2. Premium Trust / Brand Values Strip */}
       <TrustFeatures />
 
-      {/* 3. Explore by Category (Strictly dynamic from Firestore) */}
-      <CategorySection categories={categories} />
-
-      {/* 4. Loading State Skeletons */}
+      {/* 3. Loading State Skeletons */}
       {loading ? (
         <section className="relative w-full bg-[#FAF6F0] py-10 sm:py-16 overflow-hidden border-t border-[#B58A45]/20">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -147,7 +144,7 @@ export default function HomePage() {
           </div>
         </section>
       ) : (
-        /* 5. The 3 Core Homepage Sections (New Arrivals, Trending Sarees, Bestsellers) */
+        /* 4. The 3 Core Homepage Sections (New Arrivals, Trending Sarees, Bestsellers) */
         homepageProductSections.map(({ section, products: sectionProducts }) => {
           // Gracefully hide sections that have 0 products matching the criteria
           if (sectionProducts.length === 0) {
@@ -164,17 +161,20 @@ export default function HomePage() {
         })
       )}
 
-      {/* 6. Brand Story & Heritage Lineage */}
+      {/* 5. Brand Story & Heritage Lineage */}
       <BrandStory />
 
-      {/* 7. The Art of the Weave / Craftsmanship */}
+      {/* 6. The Art of the Weave / Craftsmanship */}
       <CraftsmanshipSection />
 
-      {/* 8. Collection Call-to-Action */}
+      {/* 7. Collection Call-to-Action */}
       <CollectionCta />
 
-      {/* 9. Privileged Access / Newsletter */}
+      {/* 8. Privileged Access / Newsletter */}
       <NewsletterSection />
+
+      {/* 9. Explore by Category (Positioned at the bottom of the homepage above footer) */}
+      <CategorySection categories={categories} />
     </div>
   );
 }
