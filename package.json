@@ -6,7 +6,8 @@
     "dev": "next dev -p 3001",
     "build": "next build --webpack",
     "start": "next start -p 3000",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --experimental-strip-types lib/__tests__/shipping-rate-engine.test.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",

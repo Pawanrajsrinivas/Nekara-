@@ -90,6 +90,13 @@ export default function CartPage() {
     destinationPincode?: string;
     shippingMode?: "S" | "E";
     shippingModeLabel?: string;
+    estimatedDeliveryText?: string;
+    zoneName?: string;
+    serviceabilityNote?: string;
+    modeEstimates?: {
+      S?: { shippingFee: number; estimatedDeliveryText: string } | null;
+      E?: { shippingFee: number; estimatedDeliveryText: string } | null;
+    };
   } | null>(null);
 
   // Authoritative payment fee calculation for customer preview with shipping fee (only include shippingFee when quote is valid)
@@ -116,7 +123,6 @@ export default function CartPage() {
       // Immediately invalidate previous quote while calculating
       setShippingState("calculating");
       setShippingFee(0);
-      setShippingQuoteInfo(null);
       setShippingErrorMessage(null);
 
       try {
@@ -149,7 +155,7 @@ export default function CartPage() {
           setShippingErrorMessage(
             data?.message ||
               data?.error ||
-              "We couldn't calculate the shipping charge right now. Please try again."
+              "Shipping rate not configured for this destination"
           );
           return;
         }
@@ -162,7 +168,11 @@ export default function CartPage() {
           shippingMode: data.shippingMode || modeToUse,
           shippingModeLabel:
             data.shippingModeLabel ||
-            (modeToUse === "E" ? "Express Delivery" : "Normal Delivery (Surface)"),
+            (modeToUse === "E" ? "Express Delivery" : "Normal Surface"),
+          estimatedDeliveryText: data.estimatedDeliveryText,
+          zoneName: data.zoneName,
+          serviceabilityNote: data.serviceabilityNote,
+          modeEstimates: data.modeEstimates,
         });
         setShippingState("success");
         setShippingErrorMessage(null);
@@ -173,7 +183,7 @@ export default function CartPage() {
         setShippingFee(0);
         setShippingQuoteInfo(null);
         setShippingErrorMessage(
-          "We couldn't calculate the shipping charge right now. Please try again."
+          "Unable to calculate estimated shipping charge right now. Please try again."
         );
       }
     },
@@ -198,8 +208,8 @@ export default function CartPage() {
   const handleShippingModeChange = (newMode: "S" | "E") => {
     if (newMode === shippingMode) return;
     // Immediately invalidate previous quote before switching mode
+    setShippingState("calculating");
     setShippingFee(0);
-    setShippingQuoteInfo(null);
     setShippingErrorMessage(null);
     setShippingMode(newMode);
   };
@@ -999,10 +1009,10 @@ export default function CartPage() {
                         </div>
                       </div>
 
-                      {/* Delhivery Delivery Mode Selection: Normal (Surface) vs Express */}
+                      {/* Delivery Mode Selection: Normal Surface vs Express Delivery */}
                       <div className="pt-2">
                         <label className="block text-xs font-medium text-[#241A15] mb-2">
-                          Delivery Speed &amp; Method (Delhivery Insured Transit) *
+                          Delivery Speed &amp; Method (Estimated Shipping) *
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <button
@@ -1015,12 +1025,26 @@ export default function CartPage() {
                                 : "bg-[#FAF6F0] border-[#B58A45]/30 hover:border-[#B58A45]"
                             )}
                           >
-                            <div>
-                              <span className="text-xs font-semibold text-[#241A15] block">
-                                Normal Delivery (Surface)
-                              </span>
-                              <span className="text-[11px] text-[#3A2115]/65 block mt-0.5">
-                                Standard surface transit • 4–7 business days
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-[#241A15]">
+                                  Normal Surface
+                                </span>
+                                {cleanCurrentPin.length === 6 &&
+                                  shippingQuoteInfo?.destinationPincode === cleanCurrentPin &&
+                                  shippingQuoteInfo?.modeEstimates?.S && (
+                                    <span className="text-xs font-bold text-[#075E5A]">
+                                      {formatINR(shippingQuoteInfo.modeEstimates.S.shippingFee)}
+                                    </span>
+                                  )}
+                              </div>
+                              <span className="text-[11px] text-[#3A2115]/65 block">
+                                Estimated delivery time:{" "}
+                                {cleanCurrentPin.length === 6 &&
+                                shippingQuoteInfo?.destinationPincode === cleanCurrentPin &&
+                                shippingQuoteInfo?.modeEstimates?.S?.estimatedDeliveryText
+                                  ? shippingQuoteInfo.modeEstimates.S.estimatedDeliveryText
+                                  : "3–7 business days"}
                               </span>
                             </div>
                             <span
@@ -1047,12 +1071,26 @@ export default function CartPage() {
                                 : "bg-[#FAF6F0] border-[#B58A45]/30 hover:border-[#B58A45]"
                             )}
                           >
-                            <div>
-                              <span className="text-xs font-semibold text-[#241A15] block">
-                                Express Delivery
-                              </span>
-                              <span className="text-[11px] text-[#3A2115]/65 block mt-0.5">
-                                Priority air/express transit • 2–4 business days
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-[#241A15]">
+                                  Express Delivery
+                                </span>
+                                {cleanCurrentPin.length === 6 &&
+                                  shippingQuoteInfo?.destinationPincode === cleanCurrentPin &&
+                                  shippingQuoteInfo?.modeEstimates?.E && (
+                                    <span className="text-xs font-bold text-[#075E5A]">
+                                      {formatINR(shippingQuoteInfo.modeEstimates.E.shippingFee)}
+                                    </span>
+                                  )}
+                              </div>
+                              <span className="text-[11px] text-[#3A2115]/65 block">
+                                Estimated delivery time:{" "}
+                                {cleanCurrentPin.length === 6 &&
+                                shippingQuoteInfo?.destinationPincode === cleanCurrentPin &&
+                                shippingQuoteInfo?.modeEstimates?.E?.estimatedDeliveryText
+                                  ? shippingQuoteInfo.modeEstimates.E.estimatedDeliveryText
+                                  : "2–4 business days"}
                               </span>
                             </div>
                             <span
@@ -1069,6 +1107,9 @@ export default function CartPage() {
                             </span>
                           </button>
                         </div>
+                        <p className="text-[10px] text-[#3A2115]/60 mt-1.5">
+                          Shipping charges and delivery timelines are estimated from our configured rate card. Courier serviceability for individual PIN codes is subject to confirmation after order placement.
+                        </p>
                       </div>
                     </form>
                   </div>
@@ -1119,12 +1160,13 @@ export default function CartPage() {
                   <div className="flex items-center justify-between text-xs text-[#3A2115]/80">
                     <div className="flex flex-col">
                       <span>
-                        Insured Delivery (
-                        {shippingMode === "E" ? "Express" : "Normal Surface"})
+                        Estimated shipping charge (
+                        {shippingMode === "E" ? "Express Delivery" : "Normal Surface"})
                       </span>
-                      {isShippingQuoteValid && shippingQuoteInfo?.message && (
-                        <span className="text-[10px] text-[#3A2115]/50">
-                          {shippingQuoteInfo.message}
+                      {isShippingQuoteValid && shippingQuoteInfo?.estimatedDeliveryText && (
+                        <span className="text-[10px] text-[#3A2115]/55">
+                          Estimated delivery time: {shippingQuoteInfo.estimatedDeliveryText}
+                          {shippingQuoteInfo.zoneName ? ` • ${shippingQuoteInfo.zoneName}` : ""}
                         </span>
                       )}
                     </div>
@@ -1135,7 +1177,7 @@ export default function CartPage() {
                       </span>
                     ) : shippingState === "error" ? (
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-rose-700 font-medium">Unavailable</span>
+                        <span className="text-[11px] text-rose-700 font-medium">Not available</span>
                         <button
                           type="button"
                           onClick={() => calculateShippingForPin(shippingAddress.postalCode, shippingMode)}
@@ -1152,7 +1194,7 @@ export default function CartPage() {
                       <span className="text-[11px] text-[#3A2115]/50 italic">
                         {cleanCurrentPin.length > 0 && cleanCurrentPin.length < 6
                           ? "Enter 6-digit PIN code"
-                          : "Fill checkout PIN for Delivery Fee"}
+                          : "Enter checkout PIN for estimate"}
                       </span>
                     )}
                   </div>
@@ -1241,7 +1283,7 @@ export default function CartPage() {
                         <span>
                           {cleanCurrentPin.length !== 6
                             ? "Enter 6-digit PIN code to unlock payment"
-                            : "Valid shipping quote required to pay"}
+                            : "Valid shipping estimate required to pay"}
                         </span>
                       ) : (
                         <>
@@ -1275,8 +1317,8 @@ export default function CartPage() {
                     <span>100% Certified Silk Mark Guarantee</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm">✈️</span>
-                    <span>Free Nationwide Express Delivery</span>
+                    <span className="text-sm">📦</span>
+                    <span>Pan-India Dispatch (Normal Surface &amp; Express Options)</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm">🔒</span>

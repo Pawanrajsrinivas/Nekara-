@@ -135,6 +135,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Fetch live product data from Firestore using Firebase Admin SDK (Pricing Authority)
     const enrichedItems: OrderItem[] = [];
+    const itemWeightsGrams: number[] = [];
     let serverTotalAmount = 0;
 
     for (const item of items) {
@@ -183,6 +184,17 @@ export async function POST(req: NextRequest) {
 
       serverTotalAmount += unitPrice * item.quantity;
 
+      const unitWeightGrams =
+        typeof prodData.weightGrams === "number" && prodData.weightGrams > 0
+          ? prodData.weightGrams
+          : typeof prodData.weight === "number" && prodData.weight > 0
+          ? prodData.weight
+          : 0;
+
+      for (let q = 0; q < item.quantity; q++) {
+        itemWeightsGrams.push(unitWeightGrams);
+      }
+
       const itemEntry: OrderItem = {
         productId: item.productId,
         name: prodData.name || "Handloom Saree",
@@ -218,9 +230,9 @@ export async function POST(req: NextRequest) {
       shippingAddress.postalCode ||
       shippingAddress.pincode ||
       ""
-    ).replace(/\D/g, "");
+    ).trim();
 
-    if (destinationPin.length !== 6) {
+    if (!/^\d{6}$/.test(destinationPin)) {
       return NextResponse.json(
         { error: "Please enter a valid six-digit delivery PIN code." },
         { status: 400 }
@@ -239,6 +251,7 @@ export async function POST(req: NextRequest) {
         shippingMode: normalizedMode,
         totalQuantity,
         orderSubtotal: serverTotalAmount,
+        itemWeightsGrams: itemWeightsGrams.some((w) => w > 0) ? itemWeightsGrams : undefined,
       });
 
       if (
@@ -249,8 +262,7 @@ export async function POST(req: NextRequest) {
       ) {
         return NextResponse.json(
           {
-            error:
-              "Delhivery does not currently service this destination for the selected delivery method.",
+            error: "Shipping rate not configured for this destination",
           },
           { status: 400 }
         );
@@ -264,7 +276,7 @@ export async function POST(req: NextRequest) {
       ) {
         return NextResponse.json(
           {
-            error: `Shipping rate updated to ₹${authoritativeShippingFee} for ${shippingRateResult.shippingModeLabel}. Please review the updated total and proceed again.`,
+            error: `Estimated shipping charge updated to ₹${authoritativeShippingFee} for ${shippingRateResult.shippingModeLabel}. Please review the updated total and proceed again.`,
             updatedShippingFee: authoritativeShippingFee,
           },
           { status: 409 }
@@ -276,7 +288,7 @@ export async function POST(req: NextRequest) {
         {
           error:
             shipErr?.message ||
-            "We couldn't calculate the shipping charge right now. Please try again.",
+            "Shipping rate not configured for this destination",
         },
         { status: 400 }
       );
@@ -363,6 +375,7 @@ export async function POST(req: NextRequest) {
         shippingFee: String(authoritativeShippingFee),
         shippingMode: shippingRateResult.shippingMode,
         destinationPincode: shippingRateResult.destinationPincode,
+        rateCardVersion: shippingRateResult.rateCardVersion,
       },
     });
 
@@ -402,15 +415,24 @@ export async function POST(req: NextRequest) {
       shippingQuote: shippingRateResult
         ? {
             serviceable: shippingRateResult.serviceable,
+            serviceabilityVerified: shippingRateResult.serviceabilityVerified,
+            serviceabilityNote: shippingRateResult.serviceabilityNote,
             shippingFee: shippingRateResult.shippingFee,
             quotedAmount: shippingRateResult.shippingFee,
             originPincode: shippingRateResult.originPincode,
             destinationPincode: shippingRateResult.destinationPincode,
+            zoneId: shippingRateResult.zoneId,
+            zoneName: shippingRateResult.zoneName,
             shippingMode: shippingRateResult.shippingMode,
             shippingModeLabel: shippingRateResult.shippingModeLabel,
+            estimatedDeliveryText: shippingRateResult.estimatedDeliveryText,
+            actualWeightGrams: shippingRateResult.actualWeightGrams,
+            volumetricWeightGrams: shippingRateResult.volumetricWeightGrams,
             chargeableWeightGrams: shippingRateResult.chargeableWeightGrams,
             dimensionsCm: shippingRateResult.dimensionsCm,
             quoteSource: shippingRateResult.quoteSource,
+            rateCardVersion: shippingRateResult.rateCardVersion,
+            rateCardStatus: shippingRateResult.rateCardStatus,
             providerReference: shippingRateResult.providerReference || null,
             quotedAt: FieldValue.serverTimestamp(),
           }

@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { CONTACT_CONFIG } from "@/lib/contact-config";
+import { getCategories } from "@/lib/products";
 
 interface FooterLink {
   label: string;
@@ -12,22 +13,16 @@ interface FooterLink {
   external?: boolean;
 }
 
-const FOOTER_LINKS: Record<string, FooterLink[]> = {
-  shop: [
-    { label: "All Sarees", href: "/shop" },
-    { label: "Kanjeevaram Silks", href: "/shop?category=kanchipuram-sarees" },
-    { label: "Banarasi Heritage", href: "/shop?category=banarasi-sarees" },
-    { label: "Chanderi Handlooms", href: "/shop?category=cotton-sarees" },
-    { label: "Party Wear & Festive", href: "/shop?category=party-wear" },
-    { label: "Designer Drapes", href: "/shop?category=designer-sarees" },
-  ],
-  legal: [
-    { label: "Shipping & Delivery Policy", href: "/shipping" },
-    { label: "Return, Exchange & Refund Policy", href: "/returns" },
-    { label: "Terms & Conditions", href: "/terms" },
-    { label: "Privacy Policy", href: "/privacy" },
-  ],
-};
+const DEFAULT_SHOP_LINKS: FooterLink[] = [
+  { label: "All Sarees", href: "/shop" },
+];
+
+const LEGAL_LINKS: FooterLink[] = [
+  { label: "Shipping & Delivery Policy", href: "/shipping" },
+  { label: "Return, Exchange & Refund Policy", href: "/returns" },
+  { label: "Terms & Conditions", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy" },
+];
 
 const SECTIONS: { key: string; title: string }[] = [
   { key: "shop", title: "SHOP" },
@@ -84,6 +79,50 @@ const SOCIAL_ITEMS = [
 
 export function Footer() {
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [shopLinks, setShopLinks] = useState<FooterLink[]>(DEFAULT_SHOP_LINKS);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCategories() {
+      try {
+        const categories = await getCategories();
+        if (!isMounted || !categories || categories.length === 0) return;
+
+        const seenLabels = new Set<string>(["all sarees", "all"]);
+        const dynamicLinks: FooterLink[] = [
+          { label: "All Sarees", href: "/shop" },
+        ];
+
+        for (const cat of categories) {
+          if (cat.active === false) continue;
+          const label = (cat.name || "").trim();
+          if (!label) continue;
+          const normalizedLabel = label.toLowerCase();
+          if (seenLabels.has(normalizedLabel)) continue;
+          seenLabels.add(normalizedLabel);
+
+          const categoryParam = (cat.slug || cat.name || "").trim();
+          dynamicLinks.push({
+            label,
+            href: `/shop?category=${encodeURIComponent(categoryParam)}`,
+          });
+        }
+
+        setShopLinks(dynamicLinks);
+      } catch {
+        // Fallback smoothly to All Sarees only
+      }
+    }
+    loadCategories();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const footerLinksBySection: Record<string, FooterLink[]> = {
+    shop: shopLinks,
+    legal: LEGAL_LINKS,
+  };
 
   const toggleSection = (key: string) => {
     setOpenSection((prev) => (prev === key ? null : key));
@@ -160,7 +199,7 @@ export function Footer() {
               SHOP
             </h4>
             <ul className="space-y-2.5">
-              {FOOTER_LINKS.shop.map((item) => (
+              {shopLinks.map((item) => (
                 <li key={item.label}>
                   <Link
                     href={item.href}
@@ -180,7 +219,7 @@ export function Footer() {
                 POLICIES &amp; LEGAL
               </h4>
               <ul className="space-y-2.5">
-                {FOOTER_LINKS.legal.map((item) => (
+                {LEGAL_LINKS.map((item) => (
                   <li key={item.label}>
                     <Link
                       href={item.href}
@@ -305,7 +344,7 @@ export function Footer() {
                     }`}
                   >
                     <ul className="space-y-2.5 pl-2 border-l border-[#B58A45]/25 ml-1">
-                      {FOOTER_LINKS[sec.key].map((item) => (
+                      {(footerLinksBySection[sec.key] || []).map((item) => (
                         <li key={`mobile-link-${item.label}`}>
                           <Link
                             href={item.href}

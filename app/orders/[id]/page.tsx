@@ -467,25 +467,76 @@ export default function OrderDetailPage({ params }: PageProps) {
           </div>
 
           {order.refund && (
-            <div className="mt-6 p-4 rounded-xs bg-purple-50/90 border border-purple-200/80 text-purple-950 font-sans space-y-1.5">
+            <div className="mt-6 p-4 rounded-xs bg-purple-50/90 border border-purple-200/80 text-purple-950 font-sans space-y-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-wider text-purple-900">
                   {order.refund.status === "reported_unverified"
-                    ? `Refund Reported — Verification Pending (${formatINR(order.refund.amount)})`
+                    ? `Refund Pending Verification (${formatINR(order.refund.amount)})`
                     : order.refund.status === "pending" || order.refund.status === "processing"
                     ? `Refund Processing (${formatINR(order.refund.amount)})`
                     : `Refund Processed (${formatINR(order.refund.amount)})`}
                 </span>
-                {(order.refund.externalRefundReference || order.refund.refundId) && (
+                {(order.refund.upiTransactionId ||
+                  order.refund.externalRefundReference ||
+                  order.refund.refundId) && (
                   <span className="text-[10px] font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded-sm">
-                    {order.refund.externalRefundReference || order.refund.refundId}
+                    Ref:{" "}
+                    {order.refund.upiTransactionId ||
+                      order.refund.externalRefundReference ||
+                      order.refund.refundId}
                   </span>
                 )}
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-purple-900/90 pt-1">
+                <div>
+                  <span className="text-purple-700/80 block text-[10px] uppercase tracking-wider">
+                    Refund Method
+                  </span>
+                  <span className="font-semibold">
+                    {order.refund.method === "manual_upi" ||
+                    order.refund.refundMethod === "manual_upi" ||
+                    order.refund.source === "manual_upi" ||
+                    order.refund.method === "manual"
+                      ? "Manual UPI Refund"
+                      : "Razorpay Source Reversal"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-purple-700/80 block text-[10px] uppercase tracking-wider">
+                    Refund Amount
+                  </span>
+                  <span className="font-semibold">{formatINR(order.refund.amount)}</span>
+                </div>
+                {(order.refund.transferDate ||
+                  order.refund.externalRefundDate ||
+                  order.refund.refundedAt) && (
+                  <div>
+                    <span className="text-purple-700/80 block text-[10px] uppercase tracking-wider">
+                      Refund Date
+                    </span>
+                    <span className="font-semibold">
+                      {formatDetailDate(
+                        order.refund.transferDate ||
+                          order.refund.externalRefundDate ||
+                          order.refund.refundedAt
+                      )}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <p className="text-xs text-purple-900/80 leading-relaxed">
-                {order.refund.method === "razorpay" || order.refund.source === "external_dashboard"
-                  ? "Your refund has been initiated back to your original source payment method via Razorpay and will reflect within 5 to 7 business days per bank processing timelines."
-                  : `Your refund of ${formatINR(order.refund.amount)} has been recorded via banking settlement. Reference: ${order.refund.referenceId || order.refund.refundId || "Direct Account Transfer"}.`}
+                {order.refund.method === "manual_upi" ||
+                order.refund.refundMethod === "manual_upi" ||
+                order.refund.source === "manual_upi" ||
+                order.refund.method === "manual"
+                  ? `Your refund of ${formatINR(order.refund.amount)} has been recorded via Manual UPI transfer${
+                      order.refund.upiTransactionId || order.refund.referenceId
+                        ? ` (UPI Ref: ${order.refund.upiTransactionId || order.refund.referenceId})`
+                        : ""
+                    }.`
+                  : "Your refund has been initiated back to your original source payment method via Razorpay and will reflect within 5 to 7 business days per bank processing timelines."}
               </p>
               {order.refund.reason && (
                 <p className="text-[11px] text-purple-800/70 italic">

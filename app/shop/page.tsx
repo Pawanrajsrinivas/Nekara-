@@ -11,8 +11,8 @@ import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { ChevronDownIcon } from "@/components/ui/Icons";
 import { cn } from "@/lib/utils";
 
-const DEFAULT_CATEGORIES: { label: string; value: string }[] = [
-  { label: "All Sarees", value: "All" },
+const DEFAULT_CATEGORIES: { label: string; value: string; slug?: string }[] = [
+  { label: "All Sarees", value: "All", slug: "all" },
 ];
 
 const SORT_OPTIONS = [
@@ -26,7 +26,7 @@ function ShopInner() {
   const searchParams = useSearchParams();
   const initialCategoryParam = searchParams.get("category");
 
-  const [categories, setCategories] = useState<{ label: string; value: string }[]>(DEFAULT_CATEGORIES);
+  const [categories, setCategories] = useState<{ label: string; value: string; slug?: string }[]>(DEFAULT_CATEGORIES);
 
   // Normalize initial category from URL
   const getInitialCategory = (): string => {
@@ -49,8 +49,14 @@ function ShopInner() {
         const firestoreCats = await getCategories();
         if (firestoreCats && firestoreCats.length > 0) {
           const list = [
-            { label: "All Sarees", value: "All" },
-            ...firestoreCats.map((c) => ({ label: c.name, value: c.name })),
+            { label: "All Sarees", value: "All", slug: "all" },
+            ...firestoreCats
+              .filter((c) => c.name.trim().toLowerCase() !== "all sarees" && c.name.trim().toLowerCase() !== "all")
+              .map((c) => ({
+                label: c.name,
+                value: c.name,
+                slug: (c.slug || c.name).toLowerCase().trim().replace(/\s+/g, "-"),
+              })),
           ];
           setCategories(list);
         }
@@ -63,17 +69,23 @@ function ShopInner() {
 
   // Sync category state when URL searchParams changes
   useEffect(() => {
-    if (initialCategoryParam) {
-      const match = categories.find(
-        (c) =>
-          c.value.toLowerCase().replace(/\s+/g, "-") ===
-          initialCategoryParam.toLowerCase()
-      );
-      if (match) {
-        setSelectedCategory(match.value);
-      } else {
-        setSelectedCategory(initialCategoryParam);
-      }
+    if (!initialCategoryParam) {
+      setSelectedCategory("All");
+      return;
+    }
+    const normalizedParam = initialCategoryParam.toLowerCase().trim();
+    const normalizedSlug = normalizedParam.replace(/\s+/g, "-");
+    const match = categories.find(
+      (c) =>
+        c.value.toLowerCase().trim() === normalizedParam ||
+        c.value.toLowerCase().trim().replace(/\s+/g, "-") === normalizedSlug ||
+        (c.slug && c.slug.toLowerCase().trim() === normalizedParam) ||
+        (c.slug && c.slug.toLowerCase().trim() === normalizedSlug)
+    );
+    if (match) {
+      setSelectedCategory(match.value);
+    } else {
+      setSelectedCategory(initialCategoryParam);
     }
   }, [initialCategoryParam, categories]);
 

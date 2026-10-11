@@ -22,18 +22,28 @@ export type PaymentStatus =
 export interface OrderRefundInfo {
   refundId?: string;
   amount: number;
+  refundAmount?: number;
   reason?: string;
   status: "pending" | "processing" | "processed" | "failed" | "reported_unverified";
-  method: "razorpay" | "manual";
-  source?: "razorpay_api" | "external_dashboard";
+  method: "razorpay" | "manual_upi" | "manual";
+  refundMethod?: "razorpay" | "manual_upi" | "manual";
+  source?: "razorpay_api" | "manual_upi" | "external_dashboard";
+  upiTransactionId?: string | null;
+  upiNote?: string | null;
+  internalNote?: string | null;
+  transferDate?: string | null;
   externalRefundReference?: string | null;
   externalRefundDate?: string | null;
   verifiedExternalReference?: boolean;
   notes?: string;
   refundedAt?: any;
+  recordedAt?: any;
   createdAt?: any;
   referenceId?: string;
   processedBy?: string;
+  processedByEmail?: string;
+  recordedByAdminUid?: string;
+  recordedByAdminEmail?: string;
   recordedByEmail?: string;
 }
 
@@ -141,8 +151,15 @@ export interface ShippingQuoteSnapshot {
   shippingMode: "S" | "E";
   shippingModeLabel?: string;
   quotedAmount: number;
-  quoteSource: "delhivery" | "configured_fallback";
+  quoteSource: "internal_rate_card" | "delhivery" | "configured_fallback";
+  serviceabilityVerified?: boolean;
+  zoneId?: string;
+  zoneName?: string;
+  rateCardVersion?: string;
+  rateCardStatus?: string;
   quotedAt: any;
+  actualWeightGrams?: number;
+  volumetricWeightGrams?: number;
   chargeableWeightGrams: number;
   dimensionsCm: {
     length: number;

@@ -233,15 +233,21 @@ export async function getProducts({
     // Category filter: only apply if category is explicitly selected and not "All"
     if (category && category !== "All") {
       const normalizedFilter = category.toLowerCase().trim();
-      const filtered = items.filter(
-        (p) =>
-          p.category.toLowerCase().trim() === normalizedFilter ||
-          p.categoryName.toLowerCase().trim() === normalizedFilter ||
-          p.categoryId.toLowerCase().trim() === normalizedFilter
-      );
-      if (filtered.length > 0) {
-        items = filtered;
-      }
+      const normalizedSlug = normalizedFilter.replace(/\s+/g, "-");
+      items = items.filter((p) => {
+        const cat = (p.category || "").toLowerCase().trim();
+        const catName = (p.categoryName || "").toLowerCase().trim();
+        const catId = (p.categoryId || "").toLowerCase().trim();
+        const catSlug = cat.replace(/\s+/g, "-");
+        const catNameSlug = catName.replace(/\s+/g, "-");
+        return (
+          cat === normalizedFilter ||
+          catName === normalizedFilter ||
+          catId === normalizedFilter ||
+          catSlug === normalizedSlug ||
+          catNameSlug === normalizedSlug
+        );
+      });
     }
 
     // Featured filter: only prioritize if featured sarees exist

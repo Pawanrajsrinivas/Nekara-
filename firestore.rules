@@ -34,7 +34,14 @@ service cloud.firestore {
       return isSignedIn()
         && resource.data.userId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['hiddenForCustomer', 'deletedByCustomerAt', 'updatedAt'])
+             .hasOnly([
+               'hiddenFromCustomer',
+               'hiddenForCustomer',
+               'deletedAt',
+               'deletedBy',
+               'deletedByCustomerAt',
+               'updatedAt'
+             ])
         && request.resource.data.userId == resource.data.userId
         && request.resource.data.totalAmount == resource.data.totalAmount
         && request.resource.data.paymentStatus == resource.data.paymentStatus;
@@ -96,7 +103,8 @@ service cloud.firestore {
 
     // =========================================================
     // 6. SETTINGS (/settings/{settingId})
-    // Admin-only write; authenticated/admin read for configuration.
+    // Includes settings/shipping, settings/pricing, settings/domain.
+    // Admin-only write; Admin read from client (server routes use Admin SDK).
     // =========================================================
     match /settings/{settingId} {
       allow read: if isAdmin();
@@ -104,7 +112,7 @@ service cloud.firestore {
     }
 
     // =========================================================
-    // 7. USER PROFILES (/users/{userId})
+    // 7. USER PROFILES & CUSTOMERS (/users/{userId}, /customers/{customerId})
     // Owner can read/write their own profile but cannot self-assign admin roles.
     // =========================================================
     match /users/{userId} {
@@ -122,9 +130,19 @@ service cloud.firestore {
         allow read, create, update, delete: if isOwner(userId) || isAdmin();
       }
 
+      match /cart/{itemId} {
+        allow read, create, update, delete: if isOwner(userId) || isAdmin();
+      }
+
       match /wishlist/{itemId} {
         allow read, create, update, delete: if isOwner(userId) || isAdmin();
       }
+    }
+
+    match /customers/{customerId} {
+      allow read: if isOwner(customerId) || isAdmin();
+      allow create, update: if isOwner(customerId) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // =========================================================
@@ -150,10 +168,10 @@ service cloud.firestore {
     // =========================================================
     // 9. ORDERS (/orders/{orderId})
     // - Customers can read only their own orders (resource.data.userId == request.auth.uid).
-    // - Customers can only soft-hide their own order (hiddenForCustomer) and can NEVER
-    //   forge paymentStatus = "Paid", modify refund records, or alter order totals.
+    // - Customers can only soft-hide their own order and can NEVER forge
+    //   paymentStatus = "Paid", modify refund records, or alter order totals/shippingFee.
     // - Authoritative order creation, Razorpay verification, stock deduction, and
-    //   refund processing run on the server via Firebase Admin SDK.
+    //   refund processing (Razorpay API & Manual UPI) run on the server via Admin SDK.
     // - Admins have full read/update/delete access for fulfillment & management.
     // =========================================================
     match /orders/{orderId} {
@@ -163,6 +181,13 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isAdmin() || isCustomerOrderHideOnlyUpdate();
       allow delete: if isAdmin();
+
+      match /refunds/{refundId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/orders/$(orderId)).data.userId == request.auth.uid || isAdmin()
+        );
+        allow write: if isAdmin();
+      }
     }
 
     // =========================================================
