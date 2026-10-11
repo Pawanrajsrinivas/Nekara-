@@ -3,9 +3,21 @@ import Link from "next/link";
 import { PolicyLayout } from "@/components/policy/PolicyLayout";
 import { CONTACT_CONFIG } from "@/lib/contact-config";
 
-export const metadata = {
-  title: "Shipping & Delivery Policy | NEKARA",
-  description: "Official shipping and delivery terms, dispatch schedules, and courier partners for NEKARA sarees across India.",
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Shipping & Delivery Policy",
+  description:
+    "Official shipping and delivery terms, dispatch schedules, and courier partners for NEKARA sarees across India.",
+  alternates: {
+    canonical: "/shipping",
+  },
+  openGraph: {
+    title: "Shipping & Delivery Policy | NEKARA",
+    description:
+      "Official shipping and delivery terms, dispatch schedules, and courier partners for NEKARA sarees across India.",
+    url: "/shipping",
+  },
 };
 
 export default function ShippingPolicyPage() {

@@ -1,8 +1,8 @@
 import React from "react";
 import { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { getProductBySlug, getProducts } from "@/lib/products";
+import { SITE_URL, SITE_NAME, getCanonicalUrl } from "@/lib/seo-config";
 import { NekaraProduct } from "@/types/product";
 import { ProductDetailView } from "@/components/product/ProductDetailView";
 import { IndianOrnament } from "@/components/ui/IndianOrnament";
@@ -16,6 +16,32 @@ interface PageProps {
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function buildProductSeoDescription(product: NekaraProduct): string {
+  const rawDescription = (product.description || product.shortDescription || "").trim();
+  if (rawDescription.length >= 40) {
+    return rawDescription.slice(0, 160);
+  }
+  const attributes = [
+    product.fabric,
+    product.color,
+    product.weave,
+    product.categoryName || product.category,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return attributes
+    ? `Shop ${product.name} (${attributes}) online at NEKARA with delivery across India.`
+    : `Shop ${product.name} online at NEKARA with delivery across India.`;
+}
+
+function resolveAbsoluteImageUrl(imageUrl: string): string {
+  if (!imageUrl) return `${SITE_URL}/images/categories/silk-sarees.jpg`;
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    return imageUrl;
+  }
+  return `${SITE_URL}${imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`}`;
+}
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const decodedSlug = decodeURIComponent(slug);
@@ -23,20 +49,56 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!product) {
     return {
-      title: "Saree Not Found — NEKARA",
-      description: "Discover our handcrafted collection of luxury Indian sarees.",
+      title: "Saree Not Found",
+      description: "Explore sarees online at NEKARA.",
+      robots: {
+        index: false,
+        follow: false,
+      },
     };
   }
 
+  const canonicalSlug = encodeURIComponent(product.slug || product.id);
+  const canonicalPath = `/product/${canonicalSlug}`;
+  const description = buildProductSeoDescription(product);
+  const primaryImage = resolveAbsoluteImageUrl(product.image);
+  const isIndexable = product.active !== false;
+
   return {
-    title: `${product.name} — NEKARA Luxury Sarees`,
-    description:
-      product.description ||
-      `Explore ${product.name} handcrafted in ${product.categoryName}. Authentic Indian handloom heritage from NEKARA.`,
+    title: product.name,
+    description,
+    alternates: {
+      canonical: canonicalPath,
+    },
+    robots: isIndexable
+      ? {
+          index: true,
+          follow: true,
+        }
+      : {
+          index: false,
+          follow: false,
+        },
     openGraph: {
-      title: `${product.name} — NEKARA`,
-      description: product.subtitle || product.description,
-      images: product.image ? [{ url: product.image }] : [],
+      type: "website",
+      url: getCanonicalUrl(canonicalPath),
+      siteName: SITE_NAME,
+      title: `${product.name} | ${SITE_NAME}`,
+      description,
+      images: product.image
+        ? [
+            {
+              url: primaryImage,
+              alt: product.name,
+            },
+          ]
+        : [],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${product.name} | ${SITE_NAME}`,
+      description,
+      images: product.image ? [primaryImage] : [],
     },
   };
 }
@@ -76,7 +138,7 @@ export default async function ProductPage({ params }: PageProps) {
       limit: 6,
     });
     relatedProducts = relatedResult.products.filter((p) => p.id !== product.id).slice(0, 4);
-    
+
     // If not enough products in same category, get general products
     if (relatedProducts.length < 2) {
       const generalResult = await getProducts({ limit: 6 });
@@ -86,5 +148,90 @@ export default async function ProductPage({ params }: PageProps) {
     console.warn("Could not fetch related products:", error);
   }
 
-  return <ProductDetailView product={product} relatedProducts={relatedProducts} />;
+  const canonicalSlug = encodeURIComponent(product.slug || product.id);
+  const canonicalProductUrl = getCanonicalUrl(`/product/${canonicalSlug}`);
+  const structuredImages = (
+    product.images && product.images.length > 0 ? product.images : [product.image]
+  )
+    .filter(Boolean)
+    .map(resolveAbsoluteImageUrl);
+
+  const schemaAvailability =
+    product.stock > 0 && product.availability !== "Out of Stock"
+      ? "https://schema.org/InStock"
+      : "https://schema.org/OutOfStock";
+
+  const productJsonLd: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: buildProductSeoDescription(product),
+    image: structuredImages,
+    sku: product.sku || product.id,
+    brand: {
+      "@type": "Brand",
+      name: SITE_NAME,
+    },
+    ...(product.categoryName || product.category
+      ? { category: product.categoryName || product.category }
+      : {}),
+    ...(product.fabric ? { material: product.fabric } : {}),
+    ...(product.color ? { color: product.color } : {}),
+    ...(typeof product.price === "number" && product.price > 0
+      ? {
+          offers: {
+            "@type": "Offer",
+            url: canonicalProductUrl,
+            priceCurrency: "INR",
+            price: Number(product.price).toFixed(2),
+            availability: schemaAvailability,
+            itemCondition: "https://schema.org/NewCondition",
+          },
+        }
+      : {}),
+  };
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: SITE_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Shop",
+        item: `${SITE_URL}/shop`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: product.name,
+        item: canonicalProductUrl,
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(productJsonLd),
+        }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(breadcrumbJsonLd),
+        }}
+      />
+      <ProductDetailView product={product} relatedProducts={relatedProducts} />
+    </>
+  );
 }
+

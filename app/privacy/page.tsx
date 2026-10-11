@@ -4,9 +4,18 @@ import { PolicyLayout } from "@/components/policy/PolicyLayout";
 import { CONTACT_CONFIG } from "@/lib/contact-config";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | NEKARA",
+  title: "Privacy Policy",
   description:
     "Learn how NEKARA collects, secures, and respects your personal data in accordance with modern privacy standards.",
+  alternates: {
+    canonical: "/privacy",
+  },
+  openGraph: {
+    title: "Privacy Policy | NEKARA",
+    description:
+      "Learn how NEKARA collects, secures, and respects your personal data in accordance with modern privacy standards.",
+    url: "/privacy",
+  },
 };
 
 export default function PrivacyPolicyPage() {

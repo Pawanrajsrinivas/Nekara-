@@ -6,9 +6,18 @@ import { IndianOrnament } from "@/components/ui/IndianOrnament";
 import { LoomWeaveIcon, LotusMotifIcon, DiamondCraftIcon } from "@/components/ui/TrustIcons";
 
 export const metadata: Metadata = {
-  title: "NEKARA — Our Story | Sarees & Textiles",
+  title: "Our Story — Sarees & Textiles",
   description:
-    "Discover NEKARA's story, Indian textile heritage, craftsmanship and timeless approach to sarees.",
+    "Discover NEKARA's story, Indian textile heritage, craftsmanship, and timeless approach to sarees.",
+  alternates: {
+    canonical: "/about",
+  },
+  openGraph: {
+    title: "Our Story | NEKARA",
+    description:
+      "Discover NEKARA's story, Indian textile heritage, craftsmanship, and timeless approach to sarees.",
+    url: "/about",
+  },
 };
 
 const CRAFT_VALUES = [

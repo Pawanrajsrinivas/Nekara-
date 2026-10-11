@@ -4,9 +4,18 @@ import { PolicyLayout } from "@/components/policy/PolicyLayout";
 import { CONTACT_CONFIG } from "@/lib/contact-config";
 
 export const metadata: Metadata = {
-  title: "Return, Exchange & Refund Policy | NEKARA",
+  title: "Return, Exchange & Refund Policy",
   description:
-    "Review NEKARA's comprehensive 7-day return and exchange policy for luxury handloom sarees.",
+    "Review NEKARA's official exchange, return, and refund policy for saree orders across India.",
+  alternates: {
+    canonical: "/returns",
+  },
+  openGraph: {
+    title: "Return, Exchange & Refund Policy | NEKARA",
+    description:
+      "Review NEKARA's official exchange, return, and refund policy for saree orders across India.",
+    url: "/returns",
+  },
 };
 
 export default function ReturnsPolicyPage() {

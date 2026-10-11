@@ -4,9 +4,18 @@ import { PolicyLayout } from "@/components/policy/PolicyLayout";
 import { CONTACT_CONFIG } from "@/lib/contact-config";
 
 export const metadata: Metadata = {
-  title: "Terms & Conditions | NEKARA",
+  title: "Terms & Conditions",
   description:
     "Review the terms and conditions governing purchases, digital transactions, intellectual property, and services on NEKARA.",
+  alternates: {
+    canonical: "/terms",
+  },
+  openGraph: {
+    title: "Terms & Conditions | NEKARA",
+    description:
+      "Review the terms and conditions governing purchases, digital transactions, intellectual property, and services on NEKARA.",
+    url: "/terms",
+  },
 };
 
 export default function TermsPage() {
