@@ -135,15 +135,17 @@ export function HeroSlider({ enabled = true, title, subtitle }: HeroSliderProps 
             {HERO_SLIDES[currentSlide].description}
           </p>
 
-          {/* CTA Button */}
-          <div className="pt-2 sm:pt-3">
-            <Link
-              href={HERO_SLIDES[currentSlide].ctaLink}
-              className="inline-flex items-center gap-2 px-5 py-2.5 sm:px-7 sm:py-3 rounded-sm bg-[#C89B3C] hover:bg-[#B58A45] text-[#241A15] font-sans font-semibold text-[11px] sm:text-xs tracking-[0.16em] sm:tracking-[0.2em] uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 min-h-[42px]"
-            >
-              <span>{HERO_SLIDES[currentSlide].ctaText}</span>
-            </Link>
-          </div>
+          {/* CTA Button - Only displayed on the first slide */}
+          {currentSlide === 0 && (
+            <div className="pt-2 sm:pt-3">
+              <Link
+                href={HERO_SLIDES[currentSlide].ctaLink}
+                className="inline-flex items-center gap-2 px-5 py-2.5 sm:px-7 sm:py-3 rounded-sm bg-[#C89B3C] hover:bg-[#B58A45] text-[#241A15] font-sans font-semibold text-[11px] sm:text-xs tracking-[0.16em] sm:tracking-[0.2em] uppercase transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-0.5 min-h-[42px]"
+              >
+                <span>{HERO_SLIDES[currentSlide].ctaText}</span>
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Slide Numbers & Arrow Controls (responsive spacing & alignment) */}
